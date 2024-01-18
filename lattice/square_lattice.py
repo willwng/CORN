@@ -3,11 +3,11 @@ Class to represent square lattices
 """
 from typing import List
 
-from lattice.correlated_polarized import CorrelatedPolarizedLattice
+from lattice.abstract_lattice import AbstractLattice
 from lattice.node import Node
 
 
-class SquareLattice(CorrelatedPolarizedLattice):
+class SquareLattice(AbstractLattice):
     def generate_nodes(self, length, height) -> List[Node]:
         """
         Generates the nodes within the SquareLattice

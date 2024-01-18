@@ -14,19 +14,18 @@ class Bond(object):
     # Instance variables:
     # n_1, n_2   The two nodes that this edge bonds
     # present    Whether the bond is active
-    # boundary   Whether bond resides on top or bottom
-    # temporary  Whether bond is temporarily added for polarized/correlated network generation
+    # hor_pbc    Whether the bond is a horizontal periodic boundary condition
+    # top_pbc    Whether the bond is a top periodic boundary condition
     # corner     We need this for polarized triangular lattices
 
     # The use of slots should save on memory usage compared to a normal class object
-    __slots__ = ["n_1", "n_2", "present", "boundary", "hor_pbc", "top_pbc", "temporary", "corner", "direction", "s_key"]
+    __slots__ = ["n_1", "n_2", "present", "boundary", "hor_pbc", "top_pbc", "corner", "direction", "s_key"]
     n_1: Node
     n_2: Node
     present: bool
     boundary: bool
     hor_pbc: bool
     top_pbc: bool
-    temporary: bool
     corner: bool
     direction: int
     s_key: float
@@ -45,7 +44,6 @@ class Bond(object):
         self.boundary = False
         self.hor_pbc = False
         self.top_pbc = False
-        self.temporary = False
         self.corner = False
         self.direction = -1
         self.s_key = 0
@@ -151,18 +149,6 @@ class Bond(object):
             return self.n_2
         else:
             return self.n_1
-
-    def is_temporary(self) -> bool:
-        """
-        Returns this bond is `temporary` (used for polarized networks)
-        """
-        return self.temporary
-
-    def set_temporary(self) -> None:
-        """
-        Sets this bond to be temporary
-        """
-        self.temporary = True
 
     def get_direction(self) -> int:
         """

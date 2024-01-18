@@ -4,11 +4,11 @@ Class to generate Kagome lattices
 import math
 from typing import List
 
-from lattice.correlated_polarized import CorrelatedPolarizedLattice
+from lattice.abstract_lattice import AbstractLattice
 from lattice.node import Node
 
 
-class KagomeLattice(CorrelatedPolarizedLattice):
+class KagomeLattice(AbstractLattice):
     def generate_nodes(self, length: int, height: float) -> List[Node]:
         """
         Generates the nodes within the KagomeLattice

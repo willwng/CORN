@@ -328,7 +328,8 @@ def main():
 
     # Initialize the lattice object
     lattice = initialize_lattice(set_bonds_active=True)
-    # Remove bonds with double imaginary positions
+
+    # Slight hacky-fix. Remove bonds with double "imaginary positions" (i.e. bonds that are both periodic in x and y)
     imag_x = set([bond.get_node1() for bond in lattice.bonds if bond.is_hor_pbc()])
     imag_y = set([bond.get_node1() for bond in lattice.bonds if bond.is_top_pbc()])
     for bond in [bond for bond in lattice.get_bonds() if bond.is_hor_pbc() or bond.is_top_pbc()]:
@@ -339,6 +340,7 @@ def main():
         if node_1 in (imag_y.intersection(imag_x)) and node_2 not in (imag_y.union(imag_x)) and node_2.get_id() != 0:
             print(f"Removed double imaginary bond: {bond.get_node1().get_id()}, {bond.get_node2().get_id()}")
             lattice.drop_bond(bond)
+
     # If we are generating from scratch, save the lattice object for future re-use
     # if not Parameters.load_lattice:
     #     file_name = f"{lattice.get_description()}.pickle"

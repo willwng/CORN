@@ -4,11 +4,11 @@ Class to represent triangular lattices
 import math
 from typing import List
 
-from lattice.correlated_polarized import CorrelatedPolarizedLattice
+from lattice.abstract_lattice import AbstractLattice
 from lattice.node import Node
 
 
-class TriangularLattice(CorrelatedPolarizedLattice):
+class TriangularLattice(AbstractLattice):
     def generate_nodes(self, length, height) -> List[Node]:
         """
         Generates the nodes within the TriangularLattice
