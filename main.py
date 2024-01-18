@@ -99,11 +99,11 @@ def initialize_lattice(set_bonds_active: bool):
         print(f"Lattice loaded from {Parameters.load_lattice_pickle_file}")
     else:
         lattice = LatticeFactory.create_lattice(
-            Parameters.lattice_type,
-            Parameters.lattice_length,
-            Parameters.lattice_height,
-            Parameters.bond_generation,
-            Parameters.bend_mod != 0,
+            lattice_type=Parameters.lattice_type,
+            length=Parameters.lattice_length,
+            height=Parameters.lattice_height,
+            # Naive optimization: only set bonds active if bending is relevant
+            generate_pi_bonds=Parameters.bend_mod != 0,
         )
 
     # Pre-compute bond directions
@@ -112,10 +112,6 @@ def initialize_lattice(set_bonds_active: bool):
     # Make the lattice generic if specified
     if Parameters.is_generic:
         make_generic(lattice=lattice, rng=get_rng(), d_shift=Parameters.d_shift)
-
-    # Naive optimization: remove all the pi-bonds if we don't require bending:
-    if Parameters.bend_mod == 0:
-        lattice.drop_pi_bonds()
 
     return lattice
 

@@ -31,10 +31,9 @@ class SquareLattice(AbstractLattice):
     def generate_bonds(self) -> None:
         super().generate_bonds()
 
-    def __init__(self, length: int, height: float, generation_type: int):
+    def __init__(self, length: int, height: float):
         self.length = length
         self.height = height
-        self.generation_type = generation_type
         self.nodes = []
         self.bonds = []
         self.pi_bonds = []

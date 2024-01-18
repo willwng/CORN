@@ -2,7 +2,6 @@ from enum import Enum
 from typing import List, Optional, Any
 
 import numpy as np
-import scipy.linalg
 from scipy.sparse import spmatrix
 
 import energyminimization.matrix_helper as pos
@@ -10,7 +9,6 @@ from energyminimization.matrix_helper import KMatrixResult
 from energyminimization.solvers.conjugate_gradient import conjugate_gradient, get_matrix_precondition, \
     hybrid_conjugate_gradient
 from lattice.abstract_lattice import AbstractLattice
-from visualization.energy_density import create_voronoi
 
 
 class MinimizationType(Enum):
@@ -144,49 +142,6 @@ def linear_solve(params: SolveParameters, use_gpu: bool, use_pre: bool, reusable
         k_matrix_pbc = reusable_results.k_matrix_pbc
         k_matrix = reusable_results.k_matrix
         a_matrix, solver = reusable_results.a_matrix, reusable_results.solver
-
-    # visualize k_matrix
-    import matplotlib.pyplot as plt
-    from scipy.sparse import coo_matrix
-
-    def icholesky(a):
-        n = a.shape[0]
-        for k in range(n):
-            a[k, k] = np.sqrt(a[k, k])
-            i_, _ = a[k + 1:, k].nonzero()
-            if len(i_) > 0:
-                i_ = i_ + (k + 1)
-                a[i_, k] = a[i_, k] / a[k, k]
-            for j in i_:
-                i2_, _ = a[j:n, j].nonzero()
-                if len(i2_) > 0:
-                    i2_ = i2_ + j
-                    a[i2_, j] = a[i2_, j] - a[i2_, k] * a[j, k]
-
-        return a
-
-    perturb_matrix = k_matrix + 1e-12 * np.eye(k_matrix.shape[0])
-    q, r = scipy.linalg.qr(perturb_matrix)
-    q = coo_matrix(q)
-    fig = plt.figure()
-    ax = fig.add_subplot(111, facecolor='black')
-    ax.plot(q.col, q.row, 's', color='white', ms=1)
-    ax.set_xlim(0, q.shape[1])
-    ax.set_ylim(0, q.shape[0])
-    ax.set_aspect('equal')
-    for spine in ax.spines.values():
-        spine.set_visible(False)
-    ax.invert_yaxis()
-    ax.set_aspect('equal')
-    ax.set_xticks([])
-    ax.set_yticks([])
-    plt.show()
-    # Count the degree of each node
-    # degree = np.zeros(params.init_pos.shape[0], dtype=np.int32)
-    # for i, j, _, _, _ in params.active_bond_indices:
-    #     degree[i] += 1
-    #     degree[j] += 1
-    # degree = np.repeat(degree, 2)
 
     # Compute the energy it takes to transform the network without relaxation
     u_affine = pos.create_u_matrix(params.sheared_pos, params.init_pos).ravel()

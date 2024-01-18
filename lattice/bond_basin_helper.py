@@ -1,3 +1,8 @@
+"""
+    This file helps set the activity of bonds in a lattice (used for oriented networks).
+    The "basin" protocol allows for a value of `p` to directly translate to whether a bond is active or not (consider
+        each bond as a "basin" and the value of `p` as the water level)
+"""
 from collections import deque
 from typing import Deque
 
