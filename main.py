@@ -93,7 +93,6 @@ def initialize_lattice(set_bonds_active: bool):
     if Parameters.load_lattice:
         lattice = LatticeFactory.load_lattice_from_pickle(
             pickle_file=Parameters.load_lattice_pickle_file,
-            generation_type=Parameters.bond_generation,
             set_bonds_active=set_bonds_active
         )
         print(f"Lattice loaded from {Parameters.load_lattice_pickle_file}")

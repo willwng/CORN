@@ -31,26 +31,24 @@ class LatticeFactory:
 
     @staticmethod
     def load_lattice(
-            node_pos_data, node_data, bond_node_data, bond_data, pi_bond_data, generation_type
+            node_pos_data, node_data, bond_node_data, bond_data, pi_bond_data
     ) -> AbstractLattice:
         """
         Helper method to load a lattice from a pickle file
         """
         new_lattice = KagomeLattice(length=0, height=0, generate=False)
         new_lattice.load_lattice(node_pos_data, node_data, bond_node_data, bond_data, pi_bond_data)
-        new_lattice.generation_type = generation_type
         return new_lattice
 
     @staticmethod
     def load_lattice_from_pickle(
-            pickle_file: str, generation_type: int, set_bonds_active: bool
+            pickle_file: str, set_bonds_active: bool
     ) -> AbstractLattice:
         """
         Load a lattice from a pickle file
         """
         node_pos_data, node_data, bond_node_data, bond_data, pi_bond_data = pickle.load(open(pickle_file, "rb"))
-        lattice = LatticeFactory.load_lattice(node_pos_data, node_data, bond_node_data, bond_data, pi_bond_data,
-                                              generation_type=generation_type)
+        lattice = LatticeFactory.load_lattice(node_pos_data, node_data, bond_node_data, bond_data, pi_bond_data)
         if set_bonds_active:
             lattice.set_all_bonds_active()
         return lattice

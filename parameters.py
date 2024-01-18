@@ -27,13 +27,12 @@ class Parameters:
     # (2) Triangular
     # (3) Square
     lattice_type: int = 2
-    # Length of the lattice (typically number of nodes across). Must be int
     lattice_length: int = 50
-    # Height of the lattice. May be int or float
     lattice_height: float = 50
+
     # Generic networks have slight displacements in node positions
-    is_generic: bool = True
-    d_shift: float = 0.1
+    is_generic: bool = False
+    d_shift: float = 0.0
     # Whether to add hinges between bonds - significantly adds to computation cost
     is_hinged: bool = False
 
@@ -76,27 +75,7 @@ class Parameters:
     prob_fills: List[float] = [1.0]
 
     # ----- Network generation -----
-    # Type of network generation (how bonds are added):
-    #   (0) Randomly remove bonds (will ignore pc_strength)
-    #   (1) Correlated network (addition). Bonds are added with probability (1-pc_strength)^(max_neighbors-N_n)
-    #       where N_n is bond neighbors
-    #   (2) Correlated network (removal). Bonds are remove with probability 1-[(1-pc_strength)^(max_neighbors-N_n)]
-    #   (3) Polarized network (addition). Bond probability (1-pc_strength)^(2-N_n) where N_n is co-linear bond neighbors
-    #   (4) Polarized network (removal).
-    #   (5) Super polarized network (q=1)
-    #   (6) Polarized network (addition) with next-nearest-neighbor
-    #   (7) Polarized network (removal) with next-nearest-neighbor
-    #   (8) Custom distribution (requires 0 <= pc_strength <= 2/3). Fraction pc_strength are right, 1/3 horizontal, rest
-    #       are left
-    #   (9) Network contains only strands of bonds
-    #   (10) Polarized addition network with parallel-nearest-neighbors
-    #   (11) 4-Rule Polarized addition network with parallel-nearest-neighbors with voting (better for high strengths)
-    #   (12) 2-Rule Polarized addition network with parallel-nearest-neighbors with voting (better for high strengths)
-    #   (13) Probability of a bond is based on the direction that it leans
-    #       [pc_strength] right, [1-pc_strength] for left and horizontal
-    bond_generation: int = 13
-
-    # For oriented networks, which direction to prefer
+    # For oriented networks, which direction to prefer (0 = horizontal, 1 = right, 2 = left
     target_direction: int = 0
 
     # pc_strength is the correlation/polarized strength (0 <= pc_strength < 1)
