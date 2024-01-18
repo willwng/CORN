@@ -1,0 +1,16 @@
+# Byte-compiled / optimized / DLL files
+__pycache__
+*.py[cod]
+*$py.class
+
+# Ignore all outputs and post-processing folder
+outputs/*
+post_processing/*
+*.pdf
+*.html
+*.png
+*.csv
+*.p
+
+# PyCharm
+.idea
