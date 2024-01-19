@@ -37,42 +37,20 @@ class Parameters:
     is_hinged: bool = False
 
     # ----- Bond Occupation Protocol -----
-    # There are two protocols which are chosen based on [bond_occupation_protocol]:
-    #   (1) Start a lattice with occupation [starting_prob_fill_remove] and remove [num_remove_bonds] bonds until the
-    #       shear modulus is below [obj_tolerance]
-    #   (2) Start a lattice with [starting_prob_fill_add] and add [num_add_bonds] bonds until bond occupation is
-    #       [ending_prob_fill_add]
-    #   (3) "Water Basin" approach: each bond is assigned a random number based on a seed. We then gradually
-    #        increase p by [p_increment] and add the bond if it is greater than the seeded number
-    #   (4) For each value in [prob_fills], reset the network and set the bond occupation to that value
-    bond_occupation_protocol = 3
     # When we remove bonds, this is our stopping criteria: shear modulus is below this value
     obj_tolerance = 1e-8
 
-    # --- Protocol 1 ---
-    # Number of bonds to remove until shear modulus is zero
-    num_remove_bonds: int = 50
-    starting_prob_fill_remove: float = 1.0
-
-    # --- Protocol 2 ---
-    # Number of bonds to remove until shear modulus is zero
-    num_add_bonds: int = 50
-    starting_prob_fill_add: float = 0.3
-    ending_prob_fill_add = 0.7
-
-    # --- Protocol 3 ---
+    # "Water Basin" approach: each bond is assigned a random number based on a seed. We then gradually
+    #   increase p by [p_increment] and add the bond if it is greater than the seeded number
     random_seed: Optional[int] = 123
     # Whether to add bonds starting from [low_prob_fill_basin] or remove bonds starting from [high_prob_fill_basin]
     basin_add: bool = False
     # Whether we should fill basin with p, or simply add/remove bonds based on the order they would be added
-    use_basin: bool = True
+    use_basin: bool = False
     p_delta: float = 0.01
     # If [ending_prob_fill_basin] is greater than the threshold for a thermodynamically legal network, then threshold
     low_prob_fill_basin: float = 0.5
     high_prob_fill_basin = .65
-
-    # --- Protocol 4 ---
-    prob_fills: List[float] = [1.0]
 
     # ----- Network generation -----
     # For oriented networks, which direction to prefer (0 = horizontal, 1 = right, 2 = left

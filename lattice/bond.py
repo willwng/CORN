@@ -19,11 +19,10 @@ class Bond(object):
     # corner     We need this for polarized triangular lattices
 
     # The use of slots should save on memory usage compared to a normal class object
-    __slots__ = ["n_1", "n_2", "present", "boundary", "hor_pbc", "top_pbc", "corner", "direction", "s_key"]
+    __slots__ = ["n_1", "n_2", "present", "hor_pbc", "top_pbc", "corner", "direction", "s_key"]
     n_1: Node
     n_2: Node
     present: bool
-    boundary: bool
     hor_pbc: bool
     top_pbc: bool
     corner: bool
@@ -41,7 +40,6 @@ class Bond(object):
         self.n_2 = n_2
         assert self.n_1 != self.n_2
         self.present = is_present
-        self.boundary = False
         self.hor_pbc = False
         self.top_pbc = False
         self.corner = False
@@ -72,29 +70,6 @@ class Bond(object):
         Returns whether this bond exists
         """
         return self.present
-
-    def is_boundary(self) -> bool:
-        """
-        Returns whether this bond is bounded, meaning it should not move during
-        minimization (not to be confused with periodic boundary condition)
-        """
-        return self.boundary
-
-    def set_boundary(self) -> None:
-        """
-        Sets this bound to be bounded during minimization
-        """
-        self.boundary = True
-        self.get_node1().set_boundary()
-        self.get_node2().set_boundary()
-
-    def set_non_boundary(self) -> None:
-        """
-        Sets this bound to be bounded during minimization
-        """
-        self.boundary = False
-        self.get_node1().set_non_boundary()
-        self.get_node2().set_non_boundary()
 
     def is_hor_pbc(self) -> bool:
         """

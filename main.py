@@ -17,7 +17,6 @@ from energyminimization.minimize import MinimizationResult
 from energyminimization.solvers.solver import ReusableResults
 from lattice.abstract_lattice import AbstractLattice
 from lattice.generic_lattice import make_generic
-from lattice.hinged_lattice import add_hinges
 from lattice.lattice_factory import LatticeFactory
 from parameters import Parameters
 from result_handling.output_handler import OutputHandler, PickleHandler
@@ -69,20 +68,12 @@ def run_minimization(
 
 def set_lattice_bonds(lattice: AbstractLattice, p_fill: float):
     """
-    Sets the lattice bond generation
-    (random, correlated (add/remove), polarized (add/remove))
+    Sets the lattice bond fill probability
 
     :param lattice: the lattice object
-    :param p_fill: desired bond occupation probability
-    :param p_fill: float (0 <= p <= 1)
+    :param p_fill: desired bond occupation probability (0 <= p_fill <= 1)
     """
-    # (random, correlated (add/remove), polarized (add/remove))
-    lattice.set_bonds(prob_fill=p_fill, strength=Parameters.pc_strength)
-
-    # Add a node/hinge in between each bond if hinged
-    if Parameters.is_hinged:
-        add_hinges(lattice)
-
+    lattice.set_bonds(prob_fill=p_fill)
     return
 
 
@@ -196,63 +187,7 @@ def run_single_minimization(
     return moduli, minimization_results
 
 
-def run_remove_bond_protocol(lattice: AbstractLattice, output_handler: OutputHandler):
-    """
-    Removes bonds from the lattice until the shear modulus is below the tolerance
-    """
-    # Start with a full lattice
-    set_lattice_bonds(lattice=lattice, p_fill=1.0)
-    lattice.update_active_bonds()
-
-    bond_occupation = get_bond_occupation(lattice=lattice, disp=False)
-
-    # Remove bonds until the occupation is below the starting probability
-    while bond_occupation > Parameters.starting_prob_fill_remove:
-        lattice.remove_bond(num_remove=Parameters.num_remove_bonds, strength=Parameters.pc_strength)
-        bond_occupation = get_bond_occupation(lattice=lattice, disp=False)
-
-    # Run the minimization for the base lattice
-    lattice.update_active_bonds()
-    shear_modulus_simple, minimization_results = run_single_minimization(lattice, None, output_handler)
-
-    # Remove bonds until the shear modulus is below the tolerance
-    prev_final_pos = [result.final_pos for result in minimization_results]
-    while shear_modulus_simple >= Parameters.obj_tolerance:
-        for _ in range(Parameters.num_remove_bonds):
-            lattice.remove_bond(num_remove=Parameters.num_remove_bonds, strength=Parameters.pc_strength)
-        shear_modulus_simple, minimization_results = run_single_minimization(lattice, prev_final_pos,
-                                                                             output_handler)
-        # Save the final position for initial guesses on the next iteration
-        prev_final_pos = [result.final_pos for result in minimization_results]
-    return
-
-
-def run_add_bond_protocol(lattice: AbstractLattice, output_handler: OutputHandler):
-    """
-    Removes bonds from the lattice until the shear modulus is below the tolerance
-    """
-    # Start with an empty lattice
-    set_lattice_bonds(lattice=lattice, p_fill=0.0)
-    lattice.update_active_bonds()
-    bond_occupation = get_bond_occupation(lattice=lattice, disp=False)
-
-    # Add bonds until the occupation is above the starting probability
-    while bond_occupation < Parameters.starting_prob_fill_add:
-        lattice.add_bond(num_add=Parameters.num_add_bonds, strength=Parameters.pc_strength)
-        bond_occupation = get_bond_occupation(lattice=lattice, disp=False)
-
-    # Run minimization on the base lattice and remove bonds until final probability is met
-    _, minimization_results = run_single_minimization(lattice, None, output_handler)
-    prev_final_pos = [result.final_pos for result in minimization_results]
-    while bond_occupation < Parameters.ending_prob_fill_add:
-        lattice.add_bond(num_add=Parameters.num_add_bonds, strength=Parameters.pc_strength)
-        bond_occupation = get_bond_occupation(lattice=lattice, disp=False)
-        _, minimization_results = run_single_minimization(lattice, prev_final_pos, output_handler)
-        prev_final_pos = [result.final_pos for result in minimization_results]
-    return
-
-
-def run_basin_protocol(lattice: AbstractLattice, output_handler: OutputHandler, add: bool, use_basin: bool):
+def run_basin_protocol(lattice: AbstractLattice, output_handler: OutputHandler):
     """
     Assigns each bond a random number s_i in (0, 1) and increases p: when p > s_i, we add the bond i
     """
@@ -269,32 +204,25 @@ def run_basin_protocol(lattice: AbstractLattice, output_handler: OutputHandler, 
 
     # Gradually increase/decrease p (fill/drain the basin) until p_max or obj_tolerance is reached
     prev_final_pos = None
-    p = Parameters.low_prob_fill_basin if add else p_max
+    p = p_max
 
     basin.set_bonds_basin(lattice=lattice, p=p, r=r, target_direction=Parameters.target_direction)
     removal_order = basin.get_removal_order(lattice=lattice, r=r, target_direction=Parameters.target_direction)
     while True:
-        # Set the bond activity based on p, or addition/removal order
-        if use_basin:
-            basin.set_bonds_basin(lattice=lattice, p=p, r=r, target_direction=Parameters.target_direction)
-        else:
-            next_bond = removal_order.pop() if add else removal_order.popleft()
-            next_bond.add_bond() if add else next_bond.remove_bond()
-            lattice.update_active_bonds()
+        # Set the bond activity removal order
+        next_bond = removal_order.popleft()
+        next_bond.remove_bond()
+        lattice.update_active_bonds()
 
         moduli, minimization_results = run_single_minimization(lattice=lattice, prev_final_pos=prev_final_pos,
                                                                output_handler=output_handler, bond_occupation=p)
         prev_final_pos = [result.final_pos for result in minimization_results]
 
         # Update p based on either the occupation or the basin rule
-        if use_basin:
-            p = p + Parameters.p_delta if add else p - Parameters.p_delta
-        else:
-            p = get_bond_occupation(lattice=lattice, disp=False)
+        p = get_bond_occupation(lattice=lattice, disp=False)
+
         # Termination conditions for adding: reach p_max. For removing: shear modulus is below tolerance
-        if add and p > p_max:
-            break
-        elif not add and max(moduli) < Parameters.obj_tolerance:
+        if max(moduli) < Parameters.obj_tolerance:
             break
     return
 
@@ -342,16 +270,7 @@ def main():
     #     output_handler.create_initial_lattice_object_pickle(lattice=lattice, file_name=file_name)
 
     # Run the appropriate protocol
-    if Parameters.bond_occupation_protocol == 1:
-        run_remove_bond_protocol(lattice, output_handler)
-    elif Parameters.bond_occupation_protocol == 2:
-        run_add_bond_protocol(lattice, output_handler)
-    elif Parameters.bond_occupation_protocol == 3:
-        run_basin_protocol(lattice, output_handler, Parameters.basin_add, Parameters.use_basin)
-    elif Parameters.bond_occupation_protocol == 4:
-        run_p_range_protocol(lattice, output_handler)
-    else:
-        print(f"Unknown bond occupation protocol: {Parameters.bond_occupation_protocol}")
+    run_basin_protocol(lattice, output_handler)
 
     print(f"Total time used: {time.time() - start_time} seconds")
 

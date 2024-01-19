@@ -23,17 +23,16 @@ def assign_bond_levels(lattice: AbstractLattice, rng: Generator):
 
 def set_bonds_basin(lattice: AbstractLattice, p: float, r: float, target_direction: int):
     """ Sets the bonds given p and r """
-    threshold_target = (3 * r * p) / (2 + r)
-    threshold_other = (3 * p) / (2 + r)
+    # First set all bonds to active
     for bond in lattice.get_bonds():
-        # if bond.is_boundary():
-        #     continue
-        # Threshold based on direction
-        threshold = threshold_target if bond.get_direction() == target_direction else threshold_other
-        if bond.get_skey() < threshold:
-            bond.add_bond()
-        else:
-            bond.remove_bond()
+        bond.add_bond()
+
+    # Compute how many bonds we need to remove
+    num_remove = int((1 - p) * len(lattice.get_bonds()))
+    removal_order = get_removal_order(lattice, r, target_direction)
+    for _ in range(num_remove):
+        bond = removal_order.popleft()
+        bond.remove_bond()
     lattice.update_active_bonds()
     return
 
@@ -55,5 +54,5 @@ def get_removal_order(lattice: AbstractLattice, r: float, target_direction: int)
 
     # Sort in the order that they should be removed, then filter out the ones that are already removed
     removal_order = list(sorted(lattice.get_bonds(), key=lambda b: get_add_p(b, r), reverse=True))
-    removal_order = list(filter(lambda b: b.exists() and not b.is_boundary(), removal_order))
+    removal_order = list(filter(lambda b: b.exists(), removal_order))
     return deque(removal_order)

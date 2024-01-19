@@ -37,9 +37,6 @@ def plot_bond(
     elif b in largest_cluster:
         bond_color = "red"
 
-    if b.is_boundary():
-        plot_node(b.get_node1(), pos_matrix, lattice, "blue", draw_edge=False)
-        # bond_color = "green"
     # Get the bonded node id's
     n_1 = b.get_node1().get_id()
     n_2 = b.get_node2().get_id()

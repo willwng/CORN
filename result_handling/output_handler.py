@@ -145,8 +145,6 @@ class OutputHandler:
             bond_directions = np.array([bond.get_direction() for bond in lattice.get_active_bonds()])
             directions, counts = np.unique(bond_directions, return_counts=True)
             # Subtract off the number of boundary bonds (should not be counted)
-            boundary_bonds = lattice.get_num_boundary_bonds()
-            counts[directions == 0] -= boundary_bonds
             row.extend(counts)
         if self.params.inc_backbone_count:
             backbone_result = shear_mod_result.backbone_result

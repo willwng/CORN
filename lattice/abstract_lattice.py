@@ -4,15 +4,15 @@ A lattice contains information about its nodes, bonds, pi_bonds
 The positions of each node is not changed - the lattice represents
 the initial lattice
 """
-import random
+from random import shuffle
 from typing import Dict, List, Tuple
 
-from lattice.node import Node
-from lattice.bond import Bond
-from lattice.pi_bond import PiBond
-from random import shuffle
 import numpy as np
 import scipy.spatial as spatial
+
+from lattice.bond import Bond
+from lattice.node import Node
+from lattice.pi_bond import PiBond
 
 
 class AbstractLattice:
@@ -91,12 +91,6 @@ class AbstractLattice:
         self.active_bonds = [bond for bond in self.bonds if bond.exists()]
         self.update_active_pi_bonds()
 
-    def update_boundary_bonds(self) -> None:
-        """
-        Updates the array of boundary bonds
-        """
-        self.boundary_bonds = [bond for bond in self.bonds if bond.is_boundary()]
-
     def update_active_pi_bonds(self) -> None:
         """
         Updates the array of active bonds
@@ -135,45 +129,20 @@ class AbstractLattice:
         self.add_node_bonds_dic(node_2, bond)
         return bond
 
-    def define_bounded_nodes(self, top: bool, bottom: bool, right: bool = False, left: bool = False) -> None:
-        """
-        Sets all the bonds at the top and bottom to be "bounded"
-        such that their position is fixed during minimization
-        """
-        # Reset the boundary nodes
-        [node.set_non_boundary() for node in self.nodes]
-        min_x = min(node.get_xy()[0] for node in self.nodes)
-        max_x = max(node.get_xy()[0] for node in self.nodes)
-        min_y = min(node.get_xy()[1] for node in self.nodes)
-        max_y = max(node.get_xy()[1] for node in self.nodes)
-        for node in self.nodes:
-            node_x, node_y = node.get_xy()
-            if node_x == min_x and left:
-                node.set_boundary()
-            if node_x == max_x and right:
-                node.set_boundary()
-            if node_y == min_y and bottom:
-                node.set_boundary()
-            if node_y == max_y and top:
-                node.set_boundary()
-        self.update_boundary_bonds()
-
-    def get_num_boundary_bonds(self) -> int:
-        return sum(1 for b in self.bonds if b.is_boundary())
-
     def generate_bonds(self) -> None:
         """
         Generates the bonds between each pair of nodes that have a distance of 1.0
         (including periodic boundary conditions)
-        Currently is O(d*n*log(n))
+        This current implementation is O(d*n*log(n)), d = dimension, n = number of nodes
 
-        We note of the following invariant:
-        if a bond is a horizontal PBC, then the x position of node 1 is greater than node 2
-        if a bond is a top PBC, then the y position of node 1 is greater than node 2
+        Take note of the following invariant:
+            - if a bond is a horizontal PBC, then the x position of node 1 is greater than node 2
+            - if a bond is a top PBC, then the y position of node 1 is greater than node 2
         """
         self.bonds = []  # Reset the bonds
         self.node_bonds_dic = {}  # Reset lookup table
         num_nodes = len(self.nodes)
+
         # Build a simple list of the node positions and a lookup table
         node_positions = np.zeros((num_nodes, 2))
         node_lookup = []
@@ -229,79 +198,7 @@ class AbstractLattice:
         bond.set_hor_pbc(), bond.set_top_pbc()
         print("Generated " + str(len(self.bonds)) + " bonds")
 
-    def remove_edges(self, horizontal: bool) -> List[Bond]:
-        """
-        Removes the PBC edges from the lattice (horizontal if horizontal, vertical if not)
-        Returns the list of removed bonds
-        """
-        hor_edges = [bond for bond in self.get_bonds() if bond.is_hor_pbc() and bond.exists()]
-        top_edges = [bond for bond in self.get_bonds() if bond.is_top_pbc() and bond.exists()]
-        remove_edges = hor_edges if horizontal else top_edges
-        for bond in remove_edges:
-            bond.remove_bond()
-        self.update_active_bonds()
-        return remove_edges
-
-    def remove_bounded_edges(self) -> List[Bond]:
-        bounded_edges = [
-            bond for bond in self.get_bonds() if
-            bond.get_node1().is_boundary() and bond.get_node2().is_boundary()
-            and bond.exists()
-        ]
-        for bond in bounded_edges:
-            bond.remove_bond()
-        self.update_active_bonds()
-        return bounded_edges
-
-    def restore_edges(self, remove_edges: List[Bond]) -> None:
-        """
-        Re-adds the edges that were removed
-        """
-        for bond in remove_edges:
-            bond.add_bond()
-        self.update_active_bonds()
-        return
-
-    def remove_bond(self, num_remove: int, *args, **kwargs) -> None:
-        """
-        Removes a random bond from this lattice
-        """
-        removable_bonds = [bond for bond in self.get_bonds() if not bond.is_boundary() and bond.exists()]
-        # If there are not enough bonds to add, add all of them
-        if len(removable_bonds) < num_remove:
-            for bond in removable_bonds:
-                bond.remove_bond()
-                self.active_bonds.remove(bond)
-        else:
-            bonds_removed = 0
-            while bonds_removed < num_remove:
-                bond = random.choice(removable_bonds)
-                bond.remove_bond()
-                self.active_bonds.remove(bond)
-                bonds_removed += 1
-        # Maintain the active bonds
-        return
-
-    def add_bond(self, num_add: int, *args, **kwargs) -> None:
-        """
-        Removes a random bond from this lattice
-        """
-        addable_bonds = [bond for bond in self.get_bonds() if not bond.is_boundary() and not bond.exists()]
-        # If there are not enough bonds to add, add all of them
-        if len(addable_bonds) < num_add:
-            for bond in addable_bonds:
-                bond.add_bond()
-                self.active_bonds.append(bond)
-        else:
-            bonds_added = 0
-            while bonds_added < num_add:
-                bond = random.choice(addable_bonds)
-                bond.add_bond()
-                self.active_bonds.append(bond)
-                bonds_added += 1
-        return
-
-    def set_bonds(self, prob_fill: float, *args, **kwargs) -> None:
+    def set_bonds(self, prob_fill: float) -> None:
         """
         Adds/removes each bond with probability of prob_fill or (1-prob_fill).
         Should be called after the lattice object has been entirely generated (all bonds and pi bonds generated).
@@ -309,76 +206,19 @@ class AbstractLattice:
         :param prob_fill: probability of a bond existing
         :type prob_fill: float in range [0, 1]
         """
-        # Boundary bonds cannot be removed, so we ensure they are added. All other bonds are removed temporarily
-        boundary_bonds = 0
-        addable_bonds = []
-        for b in self.bonds:
-            if b.is_boundary():
-                b.add_bond()
-                boundary_bonds += 1
-            else:
-                b.remove_bond()
-                addable_bonds.append(b)
+        # First set all bonds to inactive
+        for bond in self.bonds:
+            bond.remove_bond()
 
         # The number of desired bonds to be added (total num bonds - num boundary bonds)
-        desired_bonds = int(prob_fill * (len(self.bonds) - boundary_bonds))
-        active_bonds = 0
+        desired_bonds = int(prob_fill * len(self.bonds))
 
         # Randomly shuffle the list and pick the bonds to be removed
+        addable_bonds = [bond for bond in self.get_bonds()]
         shuffle(addable_bonds)
-        current_bond = 0
-        while active_bonds < desired_bonds:
-            addable_bonds[current_bond].add_bond()
-            current_bond += 1
-            active_bonds += 1
-        # Maintain class invariant
-        self.update_active_bonds()
+        for i in range(desired_bonds):
+            addable_bonds[i].add_bond()
 
-    def set_bonds_distribution(
-            self, prob_fill: float, frac_right: float = 0.5
-    ) -> None:
-        """
-        Sets the bonds in a lattice based on a distribution
-        1/3 horizontal, frac_right right, (2/3 - frac_right) left
-
-        :param prob_fill: probability of a bond existing
-        :type prob_fill: float in range [0, 1]
-        :param frac_right: fraction of right leaning bonds
-        :type frac_right: float in range 0 <= 2/3
-        """
-        # Same as earlier
-        boundary_bonds = 0
-        addable_bonds: List[Bond] = []
-        for b in self.bonds:
-            if b.is_boundary():
-                b.add_bond()
-                boundary_bonds += 1
-            else:
-                b.remove_bond()
-                addable_bonds.append(b)
-        desired_bonds = int(prob_fill * (len(self.bonds) - boundary_bonds))
-        desired_hor = int(desired_bonds / 3)
-        desired_r = int(desired_bonds * frac_right)
-        desired_l = desired_bonds - desired_hor - desired_r
-        active_hor, active_r, active_l = 0, 0, 0
-
-        # Randomly shuffle the list and pick the bonds to be removed
-        shuffle(addable_bonds)
-        current_bond = 0
-        while active_hor < desired_hor or active_l < desired_l or active_r < desired_r:
-            potential_bond = addable_bonds[current_bond]
-            direction = potential_bond.get_direction()
-            if direction == 0 and active_hor < desired_hor:
-                potential_bond.add_bond()
-                active_hor += 1
-            elif direction == 1 and active_r < desired_r:
-                potential_bond.add_bond()
-                active_r += 1
-            elif direction == 2 and active_l < desired_l:
-                potential_bond.add_bond()
-                active_l += 1
-            current_bond += 1
-            # current_bond += 1
         # Maintain class invariant
         self.update_active_bonds()
 
@@ -391,7 +231,7 @@ class AbstractLattice:
         :return: A tuple (number active, total number)
             excluding the boundary bonds
         """
-        return len(self.active_bonds) - len(self.boundary_bonds), len(self.bonds) - len(self.boundary_bonds)
+        return len(self.active_bonds), len(self.bonds)
 
     def get_base_lattice(self) -> Tuple[List[Node], List[Bond], List[PiBond]]:
         """
@@ -422,7 +262,7 @@ class AbstractLattice:
         bond_data = []
         bond_index = {}
         for i, bond in enumerate(self.bonds):
-            bond_data.append((bond.is_boundary(), bond.is_hor_pbc(), bond.exists()))
+            bond_data.append((bond.is_hor_pbc(), bond.exists()))
             bond_index[bond] = i
 
         pi_bond_data = []
@@ -484,8 +324,6 @@ class AbstractLattice:
             self.bonds.append(Bond(n1, n2, True))
         # Set the bond data (boundary, edge, activation)
         for b, (boundary, edge, exists) in zip(self.bonds, bond_data):
-            if boundary:
-                b.set_boundary()
             if edge:
                 b.set_hor_pbc()
             if not exists:
@@ -497,13 +335,12 @@ class AbstractLattice:
             self.pi_bonds.append(PiBond(b1, b2, self.nodes[vertex], self.nodes[edge1], self.nodes[edge2]))
         # Generate the needed pi bonds and then maintain class invariant
         self.update_active_bonds()
-        self.update_boundary_bonds()
         return
 
     def generate_pi_bonds(self) -> None:
         """
         Generates the pi bonds in the lattice
-        (series of two colinear bonds with a node vertex)
+        (series of two co-linear bonds with a node vertex)
         """
         self.pi_bonds = []
         # If dictionary doesn't exist, use a brute method
@@ -543,19 +380,6 @@ class AbstractLattice:
                             r_j[0] = r_j[0] + self.length
                         else:
                             r_j[0] = r_j[0] - self.length
-
-                    # Account for top periodic bonds being shorter in distance
-                    height_change = self.height + self.height_increment
-                    if bond_i.is_temporary():
-                        if pos1_i[1] > pos2_i[1]:
-                            r_i[1] = r_i[1] + height_change
-                        else:
-                            r_i[1] = r_i[1] - height_change
-                    if bond_j.is_temporary():
-                        if pos1_j[1] > pos2_j[1]:
-                            r_j[1] = r_j[1] + height_change
-                        else:
-                            r_j[1] = r_j[1] - height_change
 
                     # Normalize
                     r_i = r_i / np.linalg.norm(r_i, axis=0)
