@@ -120,8 +120,6 @@ class AbstractLattice:
         :param active: Whether the bond is active or not
         :return: The created bond
         """
-        node_1.add_bond()
-        node_2.add_bond()
         bond = Bond(node_1, node_2, active)
         self.bonds.append(bond)
         # Add to lookup table
@@ -171,8 +169,6 @@ class AbstractLattice:
             j_nodes = np.array(tree.query_ball_point(shifted_pos[i], 1.01, 2))
             for j in j_nodes:
                 node_j = node_lookup[j]
-                node_i.set_edge()
-                node_j.set_edge()
                 bond = self.create_bond(node_i, node_j)
                 bond.set_hor_pbc()
 
@@ -184,8 +180,6 @@ class AbstractLattice:
             j_nodes = np.array(tree.query_ball_point(shifted_pos[i], 1.01, 2))
             for j in j_nodes:
                 node_j = node_lookup[j]
-                node_i.set_top_edge()
-                node_j.set_top_edge()
                 bond = self.create_bond(node_i, node_j)
                 bond.set_top_pbc()
 
@@ -193,7 +187,6 @@ class AbstractLattice:
         max_length = max(node.get_xy()[0] for node in self.nodes)
         node_i = [node for node in self.nodes if node.get_xy()[0] == max_length and node.get_xy()[1] == max_height][0]
         node_j = [node for node in self.nodes if node.get_xy()[0] == 0 and node.get_xy()[1] == 0][0]
-        node_i.set_edge(), node_i.set_top_edge(), node_j.set_edge(), node_j.set_top_edge()
         bond = self.create_bond(node_i, node_j)
         bond.set_hor_pbc(), bond.set_top_pbc()
         print("Generated " + str(len(self.bonds)) + " bonds")

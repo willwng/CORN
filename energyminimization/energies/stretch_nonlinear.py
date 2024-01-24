@@ -38,8 +38,13 @@ def get_nl_stretch_jacobian(u_matrix: np.ndarray, stretch_mod: float, r_matrix: 
     return gradient
 
 
-def get_nl_stretch_energy(u_matrix: np.ndarray, stretch_mod: float, r_matrix: np.ndarray, length_matrix: np.ndarray,
-                          active_bond_indices: np.ndarray) -> float:
+def get_nonlinear_stretch_energy(
+        stretch_mod: float,
+        u_matrix: np.ndarray,
+        r_matrix: np.ndarray,
+        active_bond_indices: np.ndarray,
+        active_bond_lengths: np.ndarray
+) -> float:
     d, _ = get_bond_lengths(u_matrix=u_matrix, r_matrix=r_matrix, length_matrix=length_matrix,
                             active_bond_indices=active_bond_indices)
     energy = 0.5 * stretch_mod * np.square(d)

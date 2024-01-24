@@ -33,8 +33,6 @@ class Parameters:
     # Generic networks have slight displacements in node positions
     is_generic: bool = False
     d_shift: float = 0.0
-    # Whether to add hinges between bonds - significantly adds to computation cost
-    is_hinged: bool = False
 
     # ----- Bond Occupation Protocol -----
     # When we remove bonds, this is our stopping criteria: shear modulus is below this value

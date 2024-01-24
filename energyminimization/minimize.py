@@ -77,34 +77,29 @@ def minimize(
     """
     start_time = time.time()
 
-    bonds = lattice.get_active_bonds()
-    pi_bonds = lattice.get_active_pi_bonds()
-
-    active_bonds = [b for b in bonds if b.exists()]
-    active_pi_bonds = [p for p in pi_bonds if p.exists()]
-
     # Map from bond object to index (in active_bond_indices and r_matrix)
     bond_to_idx = {}
 
-    # active_bond_indices[i] contains: [node_1 id, node_2 id, horizontal PBC, top PBC, index for r_matrix]
-    active_bond_indices = np.zeros((len(active_bonds), 5), dtype=np.int32)
-    for i, bond in enumerate(active_bonds):
-        if bond.exists():
-            active_bond_indices[i][0] = bond.get_node1().get_id()
-            active_bond_indices[i][1] = bond.get_node2().get_id()
-            active_bond_indices[i][2] = bond.is_hor_pbc()
-            active_bond_indices[i][3] = bond.is_top_pbc()
-            active_bond_indices[i][4] = i
-            bond_to_idx[bond] = i
-
+    # all_bond_indices[i] contains: [node_1 id, node_2 id, horizontal PBC, top PBC, index for r_matrix]
     all_bond_indices = np.zeros((len(lattice.get_bonds()), 5), dtype=np.int32)
+    i_active = 0
     for i, bond in enumerate(lattice.get_bonds()):
         all_bond_indices[i][0] = bond.get_node1().get_id()
         all_bond_indices[i][1] = bond.get_node2().get_id()
         all_bond_indices[i][2] = bond.is_hor_pbc()
         all_bond_indices[i][3] = bond.is_top_pbc()
+        if bond.exists():
+            all_bond_indices[i][4] = i_active
+            bond_to_idx[bond] = i_active
+            i_active += 1
+        else:
+            all_bond_indices[i][4] = -1
+
+    # Same as all_bond_indices but only for active bonds
+    active_bond_indices = all_bond_indices[all_bond_indices[:, 4] != -1]
 
     # active_pi_indices[i] contains: [vertex id, edge 1 id, edge 2 id, bond 1 id, sign for r_matrix[bond id]]
+    active_pi_bonds = lattice.get_active_pi_bonds()
     active_pi_indices = np.zeros((len(active_pi_bonds), 5), dtype=np.int32)
     for i, pi_bond in enumerate(active_pi_bonds):
         if pi_bond.exists():
@@ -116,17 +111,19 @@ def minimize(
 
     # Initial position of nodes, initial unit vectors for bonds, initial energy
     init_pos = pos.create_pos_matrix(lattice)
-    edge_matrix = pos.create_edge_matrix(lattice, init_pos, active_bond_indices)
-    r_matrix = pos.create_r_matrix(init_pos, edge_matrix, active_bond_indices, True)
     correction_matrix = pos.create_correction_matrix(lattice=lattice, init_pos=init_pos,
                                                      trans_matrix=trans_matrix, all_bond_indices=all_bond_indices)
+    r_matrix = pos.create_r_matrix(pos_vector=init_pos, active_bond_indices=active_bond_indices, lattice=lattice,
+                                   normalize=True)
+    length_matrix = pos.create_r_matrix(pos_vector=init_pos, active_bond_indices=active_bond_indices, lattice=lattice,
+                                        normalize=False)
 
-    length_matrix = pos.create_length_matrix(init_pos, edge_matrix, active_bond_indices)
+    # length_matrix = pos.create_length_matrix(init_pos, edge_matrix, active_bond_indices)
 
     # Solve for the final relaxed position
     solve_params = solver.SolveParameters(lattice=lattice, init_pos=init_pos, sheared_pos=sheared_pos,
                                           init_guess=init_guess, r_matrix=r_matrix, correction_matrix=correction_matrix,
-                                          length_matrix=length_matrix, active_bond_indices=active_bond_indices,
+                                          length_matrix=None, active_bond_indices=active_bond_indices,
                                           active_pi_indices=active_pi_indices, stretch_mod=stretch_mod,
                                           bend_mod=bend_mod, tran_mod=tran_mod, tolerance=tolerance)
     solve_result = solver.solve(params=solve_params, minimization_type=minimization_method,

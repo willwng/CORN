@@ -30,6 +30,7 @@ def create_pos_matrix(lattice: AbstractLattice) -> np.ndarray:
     # Use pre-computed result
     if lattice in lattice_to_pos:
         return lattice_to_pos[lattice]
+    # Create new matrix
     nodes = lattice.get_nodes()
     num_nodes = len(nodes)
     pos_matrix = np.zeros((num_nodes, 2))
@@ -38,6 +39,7 @@ def create_pos_matrix(lattice: AbstractLattice) -> np.ndarray:
         n_id = node.get_id()
         pos_matrix[n_id][0] = n_pos[0]
         pos_matrix[n_id][1] = n_pos[1]
+    # Store matrix
     lattice_to_pos[lattice] = pos_matrix
     return pos_matrix
 
@@ -128,7 +130,10 @@ def create_boundary_matrix(
 
 
 def create_r_matrix(
-        pos_vector: np.ndarray, edge_matrix: np.ndarray, active_bond_indices: np.ndarray, normalize: bool
+        pos_vector: np.ndarray,
+        active_bond_indices: np.ndarray,
+        lattice: AbstractLattice,
+        normalize: bool
 ) -> np.ndarray:
     """
     Returns the matrix containing vectors between each node.
@@ -138,11 +143,9 @@ def create_r_matrix(
     :param pos_vector: Position of each node (will be reshaped) in order of
         [x_1, y_1, x_2, ...]
     :type pos_vector: Must contain 2n elements
-    :param edge_matrix: matrix used to update positions of the edge nodes
-        (so edge bonds are not overly long)
-    :type edge_matrix: Shape (n_bonds, 2)
     :param active_bond_indices: List containing indices of [i, j]
     :type active_bond_indices: Shape (# bonds, 2) matrix
+    :param lattice: Lattice object
     :param normalize: Whether to normalize the vectors to unit vectors
     :type normalize: bool
     :return: Shape (n, n, 2) matrix
@@ -150,59 +153,22 @@ def create_r_matrix(
     pos_matrix = pos_vector.reshape((-1, 2))
     # Change in x from node to node
     i, j = active_bond_indices[:, 0], active_bond_indices[:, 1]
-    r_matrix = pos_matrix[j, :] - pos_matrix[i, :]
-    r_matrix -= edge_matrix  # Subtract the x values for edge bonds
+
+    # Periodic boundary conditions require correction
+    hor_pbc, top_pbc, idx = active_bond_indices[:, 2], active_bond_indices[:, 3], active_bond_indices[:, 4]
+
+    idx_hor = idx[np.where(hor_pbc == 1)]
+    idx_top = idx[np.where(top_pbc == 1)]
+    correction = np.zeros((len(active_bond_indices), 2))
+    correction[idx_hor, 0] = lattice.get_length()
+    correction[idx_top, 1] = lattice.get_height() + lattice.height_increment
+
+    r_matrix = pos_matrix[j, :] - pos_matrix[i, :] + correction
     if normalize:
         norm_factor = np.linalg.norm(r_matrix, axis=1, keepdims=True)
         r_matrix = r_matrix / norm_factor
+
     return r_matrix
-
-
-def create_length_matrix(
-        pos_vector: np.ndarray, edge_matrix: np.ndarray, active_bond_indices: np.ndarray
-) -> np.ndarray:
-    """
-    Matrix representing the rest lengths of each bond (similar to r_matrix)
-    """
-    pos_matrix = pos_vector.reshape((-1, 2))
-    i, j = active_bond_indices[:, 0], active_bond_indices[:, 1]
-    r_matrix = pos_matrix[j, :] - pos_matrix[i, :]
-    r_matrix -= edge_matrix
-    length_matrix = np.linalg.norm(r_matrix, axis=1, keepdims=True)
-    return length_matrix.flatten()
-
-
-def create_edge_matrix(lattice: AbstractLattice, init_pos: np.ndarray, active_bond_indices: np.ndarray) -> np.ndarray:
-    """
-    create_edge_matrix is used to create a matrix that ensures the edge bonds are not overly long. Used
-    by subtracting this matrix from r_matrix
-
-    :param lattice: lattice object
-    :param init_pos: initial position matrix of the nodes
-    :type: Shape (# active_bonds, 2)
-    :param active_bond_indices: List containing indices of [i, j]
-    :type active_bond_indices: Shape (# bonds, 2) matrix
-    """
-    n = len(active_bond_indices)
-    edge_matrix = np.zeros((n, 2))
-
-    i, j = active_bond_indices[:, 0], active_bond_indices[:, 1]
-    hor_pbc, top_pbc = active_bond_indices[:, 2], active_bond_indices[:, 3]
-
-    # # Horizontal periodic boundary conditions
-    # x_i, x_j = init_pos[i, 0], init_pos[j, 0]
-    # e1 = np.where((hor_pbc == 1) & (x_i > x_j))
-    # e2 = np.where((hor_pbc == 1) & (x_i <= x_j))
-    # assert e2[0].size == 0  # x position of node_i should always be greater than node_j
-    # edge_matrix[e1, 0] = -lattice.get_length()
-    #
-    # # Vertical periodic boundary conditions
-    # y_i, y_j = init_pos[i, 1], init_pos[j, 1]
-    # e1 = np.where((top_pbc == 1) & (y_i > y_j))
-    # e2 = np.where((top_pbc == 1) & (y_i <= y_j))
-    # assert e2[0].size == 0  # y position of node_i should always be greater than node_j
-    # edge_matrix[e1, 1] = -lattice.get_height() - lattice.height_increment
-    return edge_matrix
 
 
 def create_correction_matrix(lattice: AbstractLattice, init_pos: np.ndarray,

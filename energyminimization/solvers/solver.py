@@ -155,6 +155,9 @@ def linear_solve(params: SolveParameters, use_gpu: bool, use_pre: bool, reusable
     else:
         u_0 = u_affine
 
+    # Ignore initial guess for now, to reduce possible compounding errors
+    u_0 = u_affine
+
     # Solve K @ u_r = b (where b is the Jacobian). Use conjugate gradients since K is likely singular
     b = -(k_matrix_pbc @ params.correction_matrix.ravel())
 
