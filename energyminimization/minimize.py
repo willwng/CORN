@@ -117,13 +117,12 @@ def minimize(
                                    normalize=True)
     length_matrix = pos.create_r_matrix(pos_vector=init_pos, active_bond_indices=active_bond_indices, lattice=lattice,
                                         normalize=False)
-
-    # length_matrix = pos.create_length_matrix(init_pos, edge_matrix, active_bond_indices)
+    length_matrix = np.linalg.norm(length_matrix, axis=1)
 
     # Solve for the final relaxed position
     solve_params = solver.SolveParameters(lattice=lattice, init_pos=init_pos, sheared_pos=sheared_pos,
                                           init_guess=init_guess, r_matrix=r_matrix, correction_matrix=correction_matrix,
-                                          length_matrix=None, active_bond_indices=active_bond_indices,
+                                          length_matrix=length_matrix, active_bond_indices=active_bond_indices,
                                           active_pi_indices=active_pi_indices, stretch_mod=stretch_mod,
                                           bend_mod=bend_mod, tran_mod=tran_mod, tolerance=tolerance)
     solve_result = solver.solve(params=solve_params, minimization_type=minimization_method,

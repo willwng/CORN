@@ -10,8 +10,6 @@ def make_generic(lattice: AbstractLattice, rng: np.random.Generator, d_shift: fl
     # Sort by id's to ensure replicable results
     sorted_nodes = sorted(lattice.get_nodes(), key=lambda n: n.get_id())
     for node in sorted_nodes:
-        if node.is_boundary():
-            continue
         x, y = node.get_xy()
         x += rng.uniform(-d_shift, d_shift)
         y += rng.uniform(-d_shift, d_shift)

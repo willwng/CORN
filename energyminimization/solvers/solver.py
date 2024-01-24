@@ -15,10 +15,10 @@ class MinimizationType(Enum):
     LINEAR = 0
     LINEAR_RELAX = 1
     LINEAR_FIRE = 2
-    NONLINEAR_FIRE = 3
-    LINEAR_GPU = 4
-    LINEAR_PRE = 5
-    LINEAR_PRE_GPU = 6
+    LINEAR_GPU = 3
+    LINEAR_PRE = 4
+    LINEAR_PRE_GPU = 5
+    NONLINEAR = 6
 
 
 class ReusableResults:
@@ -174,6 +174,7 @@ def linear_solve(params: SolveParameters, use_gpu: bool, use_pre: bool, reusable
 
     if info == 1:
         print("Conjugate gradient did not converge")
+        exit(1)
 
     final_pos = params.init_pos + u_relaxed.reshape((-1, 2))
 
@@ -187,6 +188,23 @@ def linear_solve(params: SolveParameters, use_gpu: bool, use_pre: bool, reusable
                        final_energy=final_energy, info=str(info), reusable_results=reusable_results)
 
 
+def nonlinear_solve(params: SolveParameters):
+    """
+    Solves the minimization problem with linearized energy by solving up a linear system and solving
+     with conjugate gradient method (optionally GPU-accelerated and/or preconditioned)
+     """
+    # Reuse the pre-computed matrices if possible
+    # Compute the energy it takes to transform the network without relaxation
+    u_affine = pos.create_u_matrix(params.sheared_pos, params.init_pos).ravel()
+    import energyminimization.energies.stretch_nonlinear as snl
+    init_energy_in = snl.get_nonlinear_stretch_energy(stretch_mod=params.stretch_mod, u_node_matrix=u_affine,
+                                                      r_matrix=params.r_matrix,
+                                                      active_bond_indices=params.active_bond_indices,
+                                                      active_bond_lengths=params.length_matrix)
+    print(init_energy_in)
+    return
+
+
 def solve(params: SolveParameters, minimization_type: MinimizationType,
           reusable_results: Optional[ReusableResults]) -> SolveResult:
     """ Find the relaxed, minimal energy state of the network """
@@ -198,5 +216,7 @@ def solve(params: SolveParameters, minimization_type: MinimizationType,
         return linear_solve(params=params, use_gpu=False, use_pre=True, reusable_results=reusable_results)
     elif minimization_type == MinimizationType.LINEAR_PRE_GPU:
         return linear_solve(params=params, use_gpu=True, use_pre=True, reusable_results=reusable_results)
+    if minimization_type == MinimizationType.NONLINEAR:
+        return nonlinear_solve(params=params)
     else:
         raise ValueError(f"Unknown minimization type: {minimization_type}")
