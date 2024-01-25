@@ -196,12 +196,25 @@ def nonlinear_solve(params: SolveParameters):
     # Reuse the pre-computed matrices if possible
     # Compute the energy it takes to transform the network without relaxation
     u_affine = pos.create_u_matrix(params.sheared_pos, params.init_pos).ravel()
-    import energyminimization.energies.stretch_nonlinear as snl
-    init_energy_in = snl.get_nonlinear_stretch_energy(stretch_mod=params.stretch_mod, u_node_matrix=u_affine,
-                                                      r_matrix=params.r_matrix,
-                                                      active_bond_indices=params.active_bond_indices,
-                                                      active_bond_lengths=params.length_matrix)
-    print(init_energy_in)
+
+    # Helper function for computing the energy
+    def compute_energy(u_node_matrix: np.ndarray, active_bond_indices: np.ndarray) -> float:
+        import energyminimization.energies.stretch_nonlinear as snl
+        return snl.get_nonlinear_stretch_energy(stretch_mod=params.stretch_mod,
+                                                u_node_matrix=u_node_matrix,
+                                                r_matrix=params.r_matrix,
+                                                active_bond_indices=active_bond_indices,
+                                                active_bond_lengths=params.length_matrix)
+
+    # Sort the bonds into inner degrees of freedom and periodic boundary conditions
+    bond_indices = params.active_bond_indices
+    active_bond_indices_in = bond_indices[(bond_indices[:, 2] == 0) & (bond_indices[:, 3] == 0), :]
+    active_bond_indices_pcb = bond_indices[(bond_indices[:, 2] == 1) | (bond_indices[:, 3] == 1), :]
+
+    init_energy_in = compute_energy(u_node_matrix=u_affine, active_bond_indices=active_bond_indices_in)
+    init_energy_pbc = compute_energy(u_node_matrix=u_affine + params.correction_matrix,
+                                     active_bond_indices=active_bond_indices_pcb)
+    print(init_energy_in, init_energy_pbc)
     return
 
 

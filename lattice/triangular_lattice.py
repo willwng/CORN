@@ -35,9 +35,9 @@ class TriangularLattice(AbstractLattice):
                 node_id += 1
                 self.nodes.append(node)
             h += math.sqrt(3.0)
-        print("Generated " + str(len(self.nodes)) + " nodes of Triangular lattice")
         max_height = max([node.y for node in self.nodes])
-        self.height = max_height
+        self.set_height(max_height)
+        print(f"Generated {len(self.nodes)} nodes of Triangular lattice, height: {max_height}")
         return self.nodes
 
     def generate_bonds(self) -> None:

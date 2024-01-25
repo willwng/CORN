@@ -48,10 +48,9 @@ def get_nonlinear_stretch_energy(
 ) -> float:
     u_node_matrix = u_node_matrix.reshape(-1, 2)
 
-    i, j = active_bond_indices[:, 0], active_bond_indices[:, 1]
-    hor_pbc, top_pbc, idx = active_bond_indices[:, 2], active_bond_indices[:, 3], active_bond_indices[:, 4]
+    i, j, idx = active_bond_indices[:, 0], active_bond_indices[:, 1], active_bond_indices[:, 4]
     u_matrix = u_node_matrix[i, :] - u_node_matrix[j, :]
-    c_matrix = r_matrix[idx, :] - u_matrix[idx, :]
+    c_matrix = r_matrix[idx, :] - u_matrix
     d_matrix = np.linalg.norm(c_matrix, axis=1) - active_bond_lengths[idx]
     energy = 0.5 * stretch_mod * np.square(d_matrix)
     return float(np.sum(energy))

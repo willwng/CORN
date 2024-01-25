@@ -129,6 +129,35 @@ def create_boundary_matrix(
     return bounds
 
 
+def verify_r_matrix(
+        pos_vector: np.ndarray,
+        r_matrix: np.ndarray,
+        lattice: AbstractLattice,
+        active_bond_indices: np.ndarray,
+) -> None:
+    """
+    Verifies that the r_matrix is correct
+    """
+    pos_matrix = pos_vector.reshape((-1, 2))
+    for i, j, hor, top, idx in active_bond_indices:
+        i_pos = pos_matrix[i]
+        j_pos = pos_matrix[j]
+        r_ij = j_pos - i_pos
+        if hor:
+            assert i_pos[0] > j_pos[0]
+            i_pos = i_pos - np.array([lattice.get_length(), 0])
+            r_ij = j_pos - i_pos
+        if top:
+            assert i_pos[1] > j_pos[1]
+            assert i_pos[1] == lattice.get_height()
+            i_pos = i_pos - np.array([0, lattice.get_height() + lattice.height_increment])
+            r_ij = j_pos - i_pos
+
+        assert np.allclose(r_ij, r_matrix[idx])
+
+    return
+
+
 def create_r_matrix(
         pos_vector: np.ndarray,
         active_bond_indices: np.ndarray,
@@ -148,7 +177,7 @@ def create_r_matrix(
     :param lattice: Lattice object
     :param normalize: Whether to normalize the vectors to unit vectors
     :type normalize: bool
-    :return: Shape (n, n, 2) matrix
+    :return: Shape (num_bonds, 2) matrix
     """
     pos_matrix = pos_vector.reshape((-1, 2))
     # Change in x from node to node
@@ -162,8 +191,11 @@ def create_r_matrix(
     correction = np.zeros((len(active_bond_indices), 2))
     correction[idx_hor, 0] = lattice.get_length()
     correction[idx_top, 1] = lattice.get_height() + lattice.height_increment
-
     r_matrix = pos_matrix[j, :] - pos_matrix[i, :] + correction
+
+    # Debugging: verify that r_matrix is correct
+    # verify_r_matrix(pos_vector, r_matrix, lattice, active_bond_indices)
+
     if normalize:
         norm_factor = np.linalg.norm(r_matrix, axis=1, keepdims=True)
         r_matrix = r_matrix / norm_factor
