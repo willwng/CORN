@@ -1,3 +1,5 @@
+from typing import Callable
+
 import cholespy
 import numpy as np
 import torch
@@ -110,4 +112,59 @@ def conjugate_gradient(a: spmatrix, x0: np.ndarray, b: np.ndarray, tol: float, u
         else:
             p = r + (rs_new / rs_old) * p
             rs_old = rs_new
+    return x, 1
+
+
+def line_search(f: Callable[[np.ndarray], float], x: np.ndarray, d: np.ndarray) -> float:
+    """
+    Find the step size `alpha` that minimizes f(x + alpha * d)
+    """
+    alpha = 1
+    init_fx = f(x)
+    while f(x + alpha * d) > init_fx:
+        alpha *= 0.5
+    return alpha
+
+
+def non_linear_conjugate_gradient(
+        x0: np.ndarray,
+        f: Callable[[np.ndarray], float],
+        df: Callable[[np.ndarray], np.ndarray]
+):
+    """
+    Solve min f(x) using nonlinear conjugate gradient method
+    """
+    max_iter = len(x0) * 100
+
+    x = x0.copy()
+    g = df(x)
+    d = -g
+
+    g_old = g.copy()
+    d_old = d.copy()
+
+    # Take an initial step
+    alpha = line_search(f, x, d)
+    x += alpha * d
+
+    for i in range(max_iter):
+        # Calculate the steepest descent direction
+        g = df(x)
+        if np.linalg.norm(g) < 1e-6:
+            return x, 0
+
+        # Compute beta according to Polar-Ribiere
+        y = g - g_old
+        beta = np.dot(g, y) / np.dot(g_old, g_old)
+
+        # Update the conjugate direction
+        d = -g + beta * d_old
+
+        # Update the position, after line search
+        alpha = line_search(f, x, d)
+        x += alpha * d
+
+        d_old = d
+        g_old = g
+
     return x, 1

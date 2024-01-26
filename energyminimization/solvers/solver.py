@@ -8,7 +8,7 @@ import energyminimization.matrix_helper as pos
 import energyminimization.energies.stretch_nonlinear as snl
 from energyminimization.matrix_helper import KMatrixResult
 from energyminimization.solvers.conjugate_gradient import conjugate_gradient, get_matrix_precondition, \
-    hybrid_conjugate_gradient
+    hybrid_conjugate_gradient, non_linear_conjugate_gradient
 from lattice.abstract_lattice import AbstractLattice
 
 
@@ -229,16 +229,20 @@ def nonlinear_solve(params: SolveParameters):
                                         active_bond_indices=active_bond_indices_pbc)
         return gradient_in + gradient_pbc
 
+    hessian = snl.get_nonlinear_stretch_hessian(stretch_mod=params.stretch_mod, u_node_matrix=u_affine,
+                                                r_matrix=params.r_matrix, active_bond_indices=bond_indices,
+                                                active_bond_lengths=params.length_matrix)
     from energyminimization.solvers.fire import optimize_fire
-    u_relaxed, info = optimize_fire(x0=u_affine, df=compute_total_gradient)
-
+    # u_relaxed, info = optimize_fire(x0=u_affine, df=compute_total_gradient)
+    u_relaxed = u_affine
+    u_relaxed, info = non_linear_conjugate_gradient(x0=u_affine, f=compute_total_energy, df=compute_total_gradient)
     init_energy = compute_total_energy(u_node_matrix=u_affine)
     final_pos = params.init_pos + u_relaxed.reshape((-1, 2))
 
     final_energy = compute_total_energy(u_node_matrix=u_relaxed)
     individual_energies = [final_energy, 0, 0]
     return SolveResult(final_pos=final_pos, individual_energies=individual_energies, init_energy=init_energy,
-                       final_energy=final_energy, info=str(1), reusable_results=None)
+                       final_energy=final_energy, info=str(info), reusable_results=None)
 
 
 def solve(params: SolveParameters, minimization_type: MinimizationType,
