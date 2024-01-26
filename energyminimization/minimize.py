@@ -80,7 +80,7 @@ def minimize(
     # Map from bond object to index (in active_bond_indices and r_matrix)
     bond_to_idx = {}
 
-    # all_bond_indices[i] contains: [node_1 id, node_2 id, horizontal PBC, top PBC, index for r_matrix]
+    # all_bond_indices[i] contains: [0: node_1 id, 1: node_2 id, 2: horizontal PBC, 3: top PBC, 4: index for r_matrix]
     all_bond_indices = np.zeros((len(lattice.get_bonds()), 5), dtype=np.int32)
     i_active = 0
     for i, bond in enumerate(lattice.get_bonds()):

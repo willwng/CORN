@@ -100,7 +100,7 @@ def get_stretch_jacobian(
     n = u_matrix.size
     gradient = np.zeros(n)
 
-    i, j, idx = active_bond_indices[:, 0], active_bond_indices[:, 1], active_bond_indices[:, 3]
+    i, j, idx = active_bond_indices[:, 0], active_bond_indices[:, 1], active_bond_indices[:, -1]
     r_ij = r_matrix[idx]
     gradient_c = stretch_mod * np.einsum("nk, nk -> n", np.subtract(u_matrix[i, :], u_matrix[j, :]), r_ij)
     grad_x = np.multiply(gradient_c, r_ij[:, 0])
@@ -131,7 +131,7 @@ def get_stretch_energies(
     :param active_bond_indices: List containing indices of [i, j]
     :type active_bond_indices: Shape (# bonds, 2) matrix
     """
-    i, j, idx = active_bond_indices[:, 0], active_bond_indices[:, 1], active_bond_indices[:, 3]
+    i, j, idx = active_bond_indices[:, 0], active_bond_indices[:, 1], active_bond_indices[:, -1]
     r_ij = r_matrix[idx]
     energy = 0.5 * stretch_mod * np.square(
         np.einsum("nk, nk -> n", np.subtract(u_matrix[i, :], u_matrix[j, :]), r_ij))

@@ -134,6 +134,7 @@ def verify_r_matrix(
         r_matrix: np.ndarray,
         lattice: AbstractLattice,
         active_bond_indices: np.ndarray,
+        is_generic: bool = False
 ) -> None:
     """
     Verifies that the r_matrix is correct
@@ -154,6 +155,8 @@ def verify_r_matrix(
             r_ij = j_pos - i_pos
 
         assert np.allclose(r_ij, r_matrix[idx])
+        if not is_generic:
+            assert np.allclose(np.linalg.norm(r_ij), 1)
 
     return
 

@@ -5,6 +5,7 @@ import numpy as np
 from scipy.sparse import spmatrix
 
 import energyminimization.matrix_helper as pos
+import energyminimization.energies.stretch_nonlinear as snl
 from energyminimization.matrix_helper import KMatrixResult
 from energyminimization.solvers.conjugate_gradient import conjugate_gradient, get_matrix_precondition, \
     hybrid_conjugate_gradient
@@ -193,29 +194,51 @@ def nonlinear_solve(params: SolveParameters):
     Solves the minimization problem with linearized energy by solving up a linear system and solving
      with conjugate gradient method (optionally GPU-accelerated and/or preconditioned)
      """
-    # Reuse the pre-computed matrices if possible
-    # Compute the energy it takes to transform the network without relaxation
     u_affine = pos.create_u_matrix(params.sheared_pos, params.init_pos).ravel()
+
+    # Sort the bonds into inner degrees of freedom and periodic boundary conditions
+    bond_indices = params.active_bond_indices
+    active_bond_indices_in = bond_indices[(bond_indices[:, 2] == 0) & (bond_indices[:, 3] == 0), :]
+    active_bond_indices_pbc = bond_indices[(bond_indices[:, 2] == 1) | (bond_indices[:, 3] == 1), :]
 
     # Helper function for computing the energy
     def compute_energy(u_node_matrix: np.ndarray, active_bond_indices: np.ndarray) -> float:
-        import energyminimization.energies.stretch_nonlinear as snl
         return snl.get_nonlinear_stretch_energy(stretch_mod=params.stretch_mod,
                                                 u_node_matrix=u_node_matrix,
                                                 r_matrix=params.r_matrix,
                                                 active_bond_indices=active_bond_indices,
                                                 active_bond_lengths=params.length_matrix)
 
-    # Sort the bonds into inner degrees of freedom and periodic boundary conditions
-    bond_indices = params.active_bond_indices
-    active_bond_indices_in = bond_indices[(bond_indices[:, 2] == 0) & (bond_indices[:, 3] == 0), :]
-    active_bond_indices_pcb = bond_indices[(bond_indices[:, 2] == 1) | (bond_indices[:, 3] == 1), :]
+    def compute_total_energy(u_node_matrix) -> float:
+        init_energy_in = compute_energy(u_node_matrix=u_node_matrix, active_bond_indices=active_bond_indices_in)
+        init_energy_pbc = compute_energy(u_node_matrix=u_node_matrix + params.correction_matrix,
+                                         active_bond_indices=active_bond_indices_pbc)
+        return init_energy_in + init_energy_pbc
 
-    init_energy_in = compute_energy(u_node_matrix=u_affine, active_bond_indices=active_bond_indices_in)
-    init_energy_pbc = compute_energy(u_node_matrix=u_affine + params.correction_matrix,
-                                     active_bond_indices=active_bond_indices_pcb)
-    print(init_energy_in, init_energy_pbc)
-    return
+    def compute_gradient(u_node_matrix: np.ndarray, active_bond_indices: np.ndarray) -> np.ndarray:
+        return snl.get_nonlinear_stretch_jacobian(
+            stretch_mod=params.stretch_mod,
+            u_node_matrix=u_node_matrix,
+            r_matrix=params.r_matrix,
+            active_bond_indices=active_bond_indices,
+            active_bond_lengths=params.length_matrix)
+
+    def compute_total_gradient(u_node_matrix: np.ndarray) -> np.ndarray:
+        gradient_in = compute_gradient(u_node_matrix=u_node_matrix, active_bond_indices=active_bond_indices_in)
+        gradient_pbc = compute_gradient(u_node_matrix=u_node_matrix + params.correction_matrix,
+                                        active_bond_indices=active_bond_indices_pbc)
+        return gradient_in + gradient_pbc
+
+    from energyminimization.solvers.fire import optimize_fire
+    u_relaxed, info = optimize_fire(x0=u_affine, df=compute_total_gradient)
+
+    init_energy = compute_total_energy(u_node_matrix=u_affine)
+    final_pos = params.init_pos + u_relaxed.reshape((-1, 2))
+
+    final_energy = compute_total_energy(u_node_matrix=u_relaxed)
+    individual_energies = [final_energy, 0, 0]
+    return SolveResult(final_pos=final_pos, individual_energies=individual_energies, init_energy=init_energy,
+                       final_energy=final_energy, info=str(1), reusable_results=None)
 
 
 def solve(params: SolveParameters, minimization_type: MinimizationType,
