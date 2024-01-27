@@ -119,9 +119,21 @@ def line_search(f: Callable[[np.ndarray], float], x: np.ndarray, d: np.ndarray) 
     """
     Find the step size `alpha` that minimizes f(x + alpha * d)
     """
-    alpha = 1
-    init_fx = f(x)
-    while f(x + alpha * d) > init_fx:
+    alpha = 1.0
+    f0 = f(x)
+    while f(x + alpha * d) > f0:
+        alpha *= 0.5
+    return alpha
+
+
+def armijo_line_search(f: Callable[[np.ndarray], float], x: np.ndarray, d: np.ndarray, c: float = 1e-4) -> float:
+    """
+    Find the step size `alpha` that satisfies the Armijo condition
+    """
+    alpha = 1.0
+    f0 = f(x)
+    d_2 = np.dot(d, d)
+    while f(x + alpha * d) > f0 + c * alpha * d_2:
         alpha *= 0.5
     return alpha
 
@@ -130,7 +142,8 @@ def non_linear_conjugate_gradient(
         x0: np.ndarray,
         f: Callable[[np.ndarray], float],
         df: Callable[[np.ndarray], np.ndarray],
-        hess: Optional[Callable[[np.ndarray], csr_matrix]] = None
+        hess: Optional[Callable[[np.ndarray], csr_matrix]] = None,
+        atol: float = 1e-8
 ):
     """
     Solve min f(x) using nonlinear conjugate gradient method
@@ -145,20 +158,20 @@ def non_linear_conjugate_gradient(
     d_old = d.copy()
 
     # Take an initial step
-    alpha = line_search(f, x, d)
+    alpha = armijo_line_search(f, x, d)
     x += alpha * d
 
     for i in range(max_iter):
         # Calculate the steepest descent direction
         g = df(x)
-        if np.linalg.norm(g) < 1e-7:
+        if np.linalg.norm(g) < atol:
             return x, 0
 
         # If hessian is provided, compute beta using Daniel formula
         #   Otherwise, compute beta according to Polak-Ribiere
         if hess is not None:
             h = hess(x)
-            beta = (g.T @ h @ d_old) / (d_old.T @ h @ d_old.T)
+            beta = (g.T @ (h @ d_old)) / (d_old.T @ (h @ d_old.T))
         else:
             y = g - g_old
             beta = np.dot(g, y) / np.dot(g_old, g_old)
@@ -167,7 +180,7 @@ def non_linear_conjugate_gradient(
         d = -g + beta * d_old
 
         # Update the position, after line search
-        alpha = line_search(f, x, d)
+        alpha = armijo_line_search(f, x, d)
         x += alpha * d
 
         d_old = d

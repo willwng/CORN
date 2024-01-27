@@ -9,7 +9,7 @@ import energyminimization.energies.stretch_nonlinear as snl
 from energyminimization.matrix_helper import KMatrixResult
 from energyminimization.solvers.conjugate_gradient import conjugate_gradient, get_matrix_precondition, \
     hybrid_conjugate_gradient, pre_non_linear_conjugate_gradient, non_linear_conjugate_gradient
-from energyminimization.solvers.newton import line_search_newton
+from energyminimization.solvers.newton import back_tracking_newton
 from lattice.abstract_lattice import AbstractLattice
 from tests.matrix_tests import test_gradient_hessian
 
@@ -245,13 +245,19 @@ def nonlinear_solve(params: SolveParameters):
                                       active_bond_indices=active_bond_indices_pbc)
         return hessian_in + hessian_pbc
 
-    # u_relaxed, info = optimize_fire(x0=u_affine, df=compute_total_gradient)
-    u_relaxed, info = non_linear_conjugate_gradient(x0=u_affine, f=compute_total_energy, df=compute_total_gradient,
-                                                    hess=compute_total_hessian)
-    # u_relaxed, info = line_search_newton(x0=u_affine, f=compute_total_energy, df=compute_total_gradient,
-    #                                      hess=compute_total_hessian)
-
     init_energy = compute_total_energy(u_node_matrix=u_affine)
+
+    if params.init_guess is not None:
+        u_0 = pos.create_u_matrix(params.init_guess, params.init_pos).flatten()
+    else:
+        u_0 = u_affine
+    u_relaxed, info = non_linear_conjugate_gradient(x0=u_0, f=compute_total_energy, df=compute_total_gradient,
+                                                    hess=compute_total_hessian)
+    # u_relaxed, info = back_tracking_newton(x0=u_affine, f=compute_total_energy, df=compute_total_gradient,
+    #                                        hess=compute_total_hessian)
+    # Translational invariance
+    # u_relaxed -= u_relaxed[0]
+
     final_pos = params.init_pos + u_relaxed.reshape((-1, 2))
 
     final_energy = compute_total_energy(u_node_matrix=u_relaxed)
