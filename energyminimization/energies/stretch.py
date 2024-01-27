@@ -15,7 +15,7 @@ def get_stretch_hessian(
         stretch_mod: float,
         r_matrix: np.ndarray,
         active_bond_indices: np.ndarray
-):
+) -> csr_matrix:
     """
     Returns the Hessian matrix associated with stretching
     (Currently uses a sparse matrix to save on memory usage

@@ -60,13 +60,15 @@ def get_nonlinear_stretch_hessian(
 
     # Second derivative of energy with respect to same variable
     c_ij_sq = np.square(c_matrix)
-    init_bond_lengths = active_bond_lengths.reshape(-1, 1)
+    init_bond_lengths = active_bond_lengths[idx].reshape(-1, 1)
     curr_bond_lengths = length_matrix.reshape(-1, 1)
     # Formula is a * (1 - ((l0 * (c2_ij[!i]) / l^3))
     dd = stretch_mod * (1 - np.divide(np.multiply(init_bond_lengths, c_ij_sq), np.power(curr_bond_lengths, 3)))
     dxx, dyy = dd[:, 1], dd[:, 0]
     # Formula is a * (l0 * (c_ij[0] * c_ij[1]) / l^3)
-    dxy = stretch_mod * (np.multiply(init_bond_lengths, np.prod(c_matrix, axis=1)) / np.power(curr_bond_lengths, 3))
+    c_ij_prod = np.prod(c_matrix, axis=1).flatten()
+    dxy = stretch_mod * np.divide(np.multiply(init_bond_lengths.flatten(), c_ij_prod),
+                                  np.power(curr_bond_lengths.flatten(), 3))
 
     add_entry(rows, cols, data, bond_idx, x_1, x_1, dxx)
     add_entry(rows, cols, data, bond_idx + 1, y_1, y_1, dyy)

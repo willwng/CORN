@@ -1,4 +1,4 @@
-from typing import Callable
+from typing import Callable, Optional
 
 import cholespy
 import numpy as np
@@ -129,7 +129,8 @@ def line_search(f: Callable[[np.ndarray], float], x: np.ndarray, d: np.ndarray) 
 def non_linear_conjugate_gradient(
         x0: np.ndarray,
         f: Callable[[np.ndarray], float],
-        df: Callable[[np.ndarray], np.ndarray]
+        df: Callable[[np.ndarray], np.ndarray],
+        hess: Optional[Callable[[np.ndarray], csr_matrix]] = None
 ):
     """
     Solve min f(x) using nonlinear conjugate gradient method
@@ -150,12 +151,17 @@ def non_linear_conjugate_gradient(
     for i in range(max_iter):
         # Calculate the steepest descent direction
         g = df(x)
-        if np.linalg.norm(g) < 1e-6:
+        if np.linalg.norm(g) < 1e-7:
             return x, 0
 
-        # Compute beta according to Polar-Ribiere
-        y = g - g_old
-        beta = np.dot(g, y) / np.dot(g_old, g_old)
+        # If hessian is provided, compute beta using Daniel formula
+        #   Otherwise, compute beta according to Polak-Ribiere
+        if hess is not None:
+            h = hess(x)
+            beta = (g.T @ h @ d_old) / (d_old.T @ h @ d_old.T)
+        else:
+            y = g - g_old
+            beta = np.dot(g, y) / np.dot(g_old, g_old)
 
         # Update the conjugate direction
         d = -g + beta * d_old
@@ -166,5 +172,37 @@ def non_linear_conjugate_gradient(
 
         d_old = d
         g_old = g
+
+    return x, 1
+
+
+def pre_non_linear_conjugate_gradient(
+        x0: np.ndarray,
+        f: Callable[[np.ndarray], float],
+        df: Callable[[np.ndarray], np.ndarray],
+        hess: Callable[[np.ndarray], csr_matrix]
+):
+    max_iter = len(x0) * 100
+
+    x = x0.copy()
+    g = df(x)
+    g_old = g.copy()
+    h = hess(x)
+    h, p = get_matrix_precondition(a=h, perturb=1e-10, use_gpu=False)
+    y = p.solve(x)
+    d = -y
+
+    for _ in range(max_iter):
+        if np.linalg.norm(g) < 1e-6:
+            return x, 0
+        alpha = line_search(f, x, d)
+        x += alpha * d
+        g = df(x)
+        y = p.solve(x)
+        beta = np.dot(g, y) / np.dot(g_old, g_old)
+        d = -y + beta * d
+
+        g_old = g
+        h, p = get_matrix_precondition(a=hess(x), perturb=1e-12, use_gpu=False)
 
     return x, 1
