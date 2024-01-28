@@ -3,6 +3,7 @@ visualize_lattice.py allows visualizations of the position of the lattice
 """
 
 import matplotlib.pyplot as plt
+import numpy as np
 import seaborn as sns
 
 
@@ -164,17 +165,6 @@ class Visualizer:
     def __init__(self, params: VisualizerParameters):
         self.params = params
 
-    def plot_pi_bond(self, p, pos_matrix, bond_length_matrix, lattice):
-        b_1 = p.get_bond_1()
-        b_2 = p.get_bond_2()
-        plot_bond(
-            b_1, pos_matrix, lattice, "blue", self.params.draw_edge, bond_length_matrix
-        )
-        plot_bond(
-            b_2, pos_matrix, lattice, "blue", self.params.draw_edge, bond_length_matrix
-        )
-        return
-
     def create_plot_bounds(self, lattice):
         x_min = -2 + -1.2 * lattice.get_length() * self.params.hor_shear
         x_max = (lattice.get_length() + lattice.get_height() * self.params.hor_shear) * 1.2
@@ -182,6 +172,14 @@ class Visualizer:
         y_max = 1.1 * lattice.get_height()
         plot_bounds = (x_min, x_max, y_min, y_max)
         return plot_bounds
+
+    def plot_bonds(self, pos_matrix, i, j, lattice, color):
+        thickness: float = 1 if lattice.get_length() < 200 else 0.3
+        plt.plot([pos_matrix[i, 0], pos_matrix[j, 0]], [pos_matrix[i, 1], pos_matrix[j, 1]],
+                 color=color, linewidth=thickness)
+
+    def draw_nodes(self, pos_matrix):
+        plt.scatter(pos_matrix[:, 0], pos_matrix[:, 1], s=0.5, c=self.params.node_color)
 
     def visualize(self, lattice, pos_matrix, filename, rigid_edges=None, largest_cluster=None):
         """
@@ -211,22 +209,26 @@ class Visualizer:
         plt.ylim(plot_bounds[2], plot_bounds[3])
 
         pos_matrix = pos_matrix.reshape((-1, 2))
+        active_bonds = lattice.get_active_bonds()
+        active_bond_indices = np.zeros((len(active_bonds), 4), dtype=np.int32)
+        for i, bond in enumerate(active_bonds):
+            active_bond_indices[i][0] = bond.get_node1().get_id()
+            active_bond_indices[i][1] = bond.get_node2().get_id()
+            active_bond_indices[i][2] = bond.is_hor_pbc()
+            active_bond_indices[i][3] = bond.is_top_pbc()
+
+        i, j = active_bond_indices[:, 0], active_bond_indices[:, 1]
+        idx_in = np.logical_and(active_bond_indices[:, 2] == 0, active_bond_indices[:, 3] == 0)
+        idx_hor = active_bond_indices[:, 2] == 1
+        idx_top = active_bond_indices[:, 3] == 1
+
         if self.params.draw_bonds:
-            for i, bond in enumerate(lattice.get_bonds()):
-                plot_bond(
-                    bond,
-                    pos_matrix,
-                    lattice,
-                    self.params.bond_color,
-                    self.params.draw_edge,
-                    rigid_edges=rigid_edges,
-                    largest_cluster=largest_cluster,
-                    i_bond=i,
-                )
+            # Draw inner bonds
+            i_in, j_in = i[idx_in], j[idx_in]
+            self.plot_bonds(pos_matrix, i_in, j_in, lattice, color=self.params.bond_color)
 
         if self.params.draw_nodes:
-            for node in lattice.get_nodes():
-                plot_node(node, pos_matrix, lattice, self.params.node_color, self.params.draw_edge)
+            self.draw_nodes(pos_matrix)
 
         try:
             plt.savefig(filename)
