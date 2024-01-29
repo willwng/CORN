@@ -14,10 +14,11 @@ def test_gradient_hessian(
     n_tests = 500
     results_df = np.zeros(n_tests)
     results_d2f = np.zeros(n_tests)
+    results_d2f2 = np.zeros((n_tests, x0.size))
     for i in range(n_tests):
         x = np.random.rand(x0.size)
         u = np.random.rand(x0.size)
-        h = 1e-4
+        h = 1e-6
         fp = f(x + h * u)
         fm = f(x - h * u)
         f0 = f(x)
@@ -26,11 +27,15 @@ def test_gradient_hessian(
 
         df_test = (fp - fm) / (2 * h)
         d2f_test = (fp - 2 * f0 + fm) / (h ** 2)
+        # also test hessian using finite differences of gradient
+        d2f_test2 = (df(x + h * u) - df(x - h * u)) / (2 * h)
         results_df[i] = np.abs(df_test - (df0.T @ u)) / (np.linalg.norm(df0.T @ u))
         results_d2f[i] = np.abs(d2f_test - (u.T @ h0 @ u)) / (np.linalg.norm(u.T @ h0 @ u))
+        results_d2f2[i] = np.linalg.norm(d2f_test2 - (h0 @ u)) / (np.linalg.norm(h0 @ u))
 
     print(f"df_avg: {np.mean(results_df)}, df_max: {np.max(results_df)}")
     print(f"d2f_avg: {np.mean(results_d2f)}, d2f_max: {np.max(results_d2f)}")
+    print(f"d2f2_avg: {np.mean(results_d2f2)}, d2f2_max: {np.max(results_d2f2)}")
 
 
 # plot sparsity of hessian

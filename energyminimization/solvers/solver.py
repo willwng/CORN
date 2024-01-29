@@ -1,17 +1,16 @@
 from enum import Enum
-from typing import List, Optional, Any, Callable
+from typing import List, Optional, Any
 
 import numpy as np
+from scipy.optimize import minimize
 from scipy.sparse import spmatrix, csr_matrix
 
-import energyminimization.matrix_helper as pos
 import energyminimization.energies.stretch_nonlinear as snl
+import energyminimization.matrix_helper as pos
 from energyminimization.matrix_helper import KMatrixResult
 from energyminimization.solvers.conjugate_gradient import conjugate_gradient, get_matrix_precondition, \
-    hybrid_conjugate_gradient, pre_non_linear_conjugate_gradient, non_linear_conjugate_gradient
-from energyminimization.solvers.newton import back_tracking_newton
+    hybrid_conjugate_gradient
 from lattice.abstract_lattice import AbstractLattice
-from tests.matrix_tests import test_gradient_hessian
 
 
 class MinimizationType(Enum):
@@ -204,63 +203,68 @@ def nonlinear_solve(params: SolveParameters):
     active_bond_indices_pbc = bond_indices[(bond_indices[:, 2] == 1) | (bond_indices[:, 3] == 1), :]
 
     # Helper function for computing the energy
-    def compute_energy(u_node_matrix: np.ndarray, active_bond_indices: np.ndarray) -> float:
+    def compute_energy(u: np.ndarray, active_bond_indices: np.ndarray) -> float:
         return snl.get_nonlinear_stretch_energy(stretch_mod=params.stretch_mod,
-                                                u_node_matrix=u_node_matrix,
+                                                u_node_matrix=u,
                                                 r_matrix=params.r_matrix,
                                                 active_bond_indices=active_bond_indices,
                                                 active_bond_lengths=params.length_matrix)
 
-    def compute_total_energy(u_node_matrix) -> float:
-        init_energy_in = compute_energy(u_node_matrix=u_node_matrix, active_bond_indices=active_bond_indices_in)
-        init_energy_pbc = compute_energy(u_node_matrix=u_node_matrix + params.correction_matrix,
-                                         active_bond_indices=active_bond_indices_pbc)
+    def compute_total_energy(u) -> float:
+        init_energy_in = compute_energy(u=u, active_bond_indices=active_bond_indices_in)
+        init_energy_pbc = compute_energy(u=u + params.correction_matrix, active_bond_indices=active_bond_indices_pbc)
         return init_energy_in + init_energy_pbc
 
-    def compute_gradient(u_node_matrix: np.ndarray, active_bond_indices: np.ndarray) -> np.ndarray:
+    def compute_gradient(u: np.ndarray, active_bond_indices: np.ndarray) -> np.ndarray:
         return snl.get_nonlinear_stretch_jacobian(
             stretch_mod=params.stretch_mod,
-            u_node_matrix=u_node_matrix,
+            u_node_matrix=u,
             r_matrix=params.r_matrix,
             active_bond_indices=active_bond_indices,
             active_bond_lengths=params.length_matrix)
 
-    def compute_total_gradient(u_node_matrix: np.ndarray) -> np.ndarray:
-        gradient_in = compute_gradient(u_node_matrix=u_node_matrix, active_bond_indices=active_bond_indices_in)
-        gradient_pbc = compute_gradient(u_node_matrix=u_node_matrix + params.correction_matrix,
-                                        active_bond_indices=active_bond_indices_pbc)
+    def compute_total_gradient(u: np.ndarray) -> np.ndarray:
+        gradient_in = compute_gradient(u=u, active_bond_indices=active_bond_indices_in)
+        gradient_pbc = compute_gradient(u=u + params.correction_matrix, active_bond_indices=active_bond_indices_pbc)
         return gradient_in + gradient_pbc
 
-    def compute_hessian(u_node_matrix: np.ndarray, active_bond_indices: np.ndarray) -> csr_matrix:
+    def compute_hessian(u: np.ndarray, active_bond_indices: np.ndarray) -> csr_matrix:
         return snl.get_nonlinear_stretch_hessian(
             stretch_mod=params.stretch_mod,
-            u_node_matrix=u_node_matrix,
+            u_node_matrix=u,
             r_matrix=params.r_matrix,
             active_bond_indices=active_bond_indices,
             active_bond_lengths=params.length_matrix)
 
-    def compute_total_hessian(u_node_matrix: np.ndarray) -> csr_matrix:
-        hessian_in = compute_hessian(u_node_matrix=u_node_matrix, active_bond_indices=active_bond_indices_in)
-        hessian_pbc = compute_hessian(u_node_matrix=u_node_matrix + params.correction_matrix,
-                                      active_bond_indices=active_bond_indices_pbc)
+    def compute_total_hessian(u: np.ndarray) -> csr_matrix:
+        hessian_in = compute_hessian(u=u, active_bond_indices=active_bond_indices_in)
+        hessian_pbc = compute_hessian(u=u + params.correction_matrix, active_bond_indices=active_bond_indices_pbc)
         return hessian_in + hessian_pbc
 
-    init_energy = compute_total_energy(u_node_matrix=u_affine)
+    init_energy = compute_total_energy(u=u_affine)
 
     if params.init_guess is not None:
         u_0 = pos.create_u_matrix(params.init_guess, params.init_pos).flatten()
     else:
         u_0 = u_affine
-    u_relaxed, info = non_linear_conjugate_gradient(x0=u_0, f=compute_total_energy, df=compute_total_gradient,
-                                                    hess=compute_total_hessian)
+
+    # u_relaxed, info = non_linear_conjugate_gradient(x0=u_0, f=compute_total_energy, df=compute_total_gradient,
+    #                                                 hess=compute_total_hessian)
+    # u_relaxed, info = optimize_fire(x0=u_0, df=compute_total_gradient)
     # u_relaxed, info = back_tracking_newton(x0=u_affine, f=compute_total_energy, df=compute_total_gradient,
     #                                        hess=compute_total_hessian)
-    # Translational invariance
-    # u_relaxed -= u_relaxed[0]
+
+    # res = minimize(x0=u_0, fun=compute_total_energy, jac=compute_total_gradient, hess=compute_total_hessian,
+    #                method='trust-ncg')
+    # u_relaxed = res.x
+    # info = 0 if res.success else 1
+    from energyminimization.solvers.newton import line_search_newton_cg
+    pre = False
+    u_relaxed, info = line_search_newton_cg(x0=u_0, fun=compute_total_energy, jac=compute_total_gradient,
+                                            hess=compute_total_hessian, pre=pre)
 
     final_pos = params.init_pos + u_relaxed.reshape((-1, 2))
-
-    final_energy = compute_total_energy(u_node_matrix=u_relaxed)
+    final_energy = compute_total_energy(u=u_relaxed)
     individual_energies = [final_energy, 0, 0]
     return SolveResult(final_pos=final_pos, individual_energies=individual_energies, init_energy=init_energy,
                        final_energy=final_energy, info=str(info), reusable_results=None)

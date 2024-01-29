@@ -187,35 +187,3 @@ def non_linear_conjugate_gradient(
         g_old = g
 
     return x, 1
-
-
-def pre_non_linear_conjugate_gradient(
-        x0: np.ndarray,
-        f: Callable[[np.ndarray], float],
-        df: Callable[[np.ndarray], np.ndarray],
-        hess: Callable[[np.ndarray], csr_matrix]
-):
-    max_iter = len(x0) * 100
-
-    x = x0.copy()
-    g = df(x)
-    g_old = g.copy()
-    h = hess(x)
-    h, p = get_matrix_precondition(a=h, perturb=1e-10, use_gpu=False)
-    y = p.solve(x)
-    d = -y
-
-    for _ in range(max_iter):
-        if np.linalg.norm(g) < 1e-6:
-            return x, 0
-        alpha = line_search(f, x, d)
-        x += alpha * d
-        g = df(x)
-        y = p.solve(x)
-        beta = np.dot(g, y) / np.dot(g_old, g_old)
-        d = -y + beta * d
-
-        g_old = g
-        h, p = get_matrix_precondition(a=hess(x), perturb=1e-12, use_gpu=False)
-
-    return x, 1
