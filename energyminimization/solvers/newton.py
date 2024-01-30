@@ -6,9 +6,37 @@ from typing import Callable
 import numpy as np
 import torch
 from scipy.optimize import line_search
-from scipy.sparse import csr_matrix
+from scipy.sparse import csr_matrix, diags, linalg
 
 from energyminimization.solvers.conjugate_gradient import conjugate_gradient, get_matrix_precondition
+
+
+def inexact_modified_chol(A: csr_matrix):
+    """
+    Inexact modified Cholesky factorization
+    """
+    # Compute T = diag(||Ae1||, ||Ae2||, ..., ||Aen||), where ei is the ith coordinate vector
+    T_diag = linalg.norm(A, axis=1)
+    T_sqrt_inv_diags = 1.0 / np.sqrt(T_diag)
+    T_sqrt_inv = diags(T_sqrt_inv_diags)
+
+    A_tilde = T_sqrt_inv @ A @ T_sqrt_inv
+    beta = linalg.norm(A_tilde)
+    # Compute a shift to ensure positive definiteness
+    A_diag = A.diagonal()
+    if np.min(A_diag) > 0:
+        alpha = 0
+    else:
+        alpha = beta / 2
+
+    for k in range(100):
+        try:
+            a_torch, solver = get_matrix_precondition(A_tilde, perturb=alpha, use_gpu=False)
+            return a_torch, solver
+        except ValueError:
+            alpha = max(2 * alpha, beta / 2)
+
+    return None, None
 
 
 def newton(
@@ -80,7 +108,8 @@ def line_search_newton_cg(fun, x0, jac, hess, x_tol=1e-8, pre: bool = False):
         z0 = np.zeros_like(x)
         r, d, p = g.copy(), -g, -g
         if pre:
-            A, M = get_matrix_precondition(A, perturb=1e-8, use_gpu=False)
+            # A, M = get_matrix_precondition(A, perturb=1e-8, use_gpu=False)
+            _, M = inexact_modified_chol(A)
             p, cg_info = pre_inner_newton_cg(z0=z0, g=g, r=r, d=d, A=A, M=M, tol=tol, cg_max_iter=cg_max_iter)
             p = p.cpu().numpy()
         else:
@@ -102,17 +131,20 @@ def line_search_newton_cg(fun, x0, jac, hess, x_tol=1e-8, pre: bool = False):
 
 def inner_newton_cg(z0, g, r, d, A, tol, cg_max_iter):
     """
-    Inner loop for Newton-CG
+    Inner loop for Newton-CG, solves for the search direction p in the linear system
+        Ap = -g, where A is the Hessian and g is the gradient.
     """
     z = z0.copy()
     float64eps = np.finfo(np.float64).eps
 
     rs_old = np.dot(r, r)
     for j in range(cg_max_iter):
+        # Check for convergence
         if np.add.reduce(np.abs(r)) <= tol:
             return z, 0
-        dBd = np.dot(d, (A.dot(d)))
+
         # Curvature is small
+        dBd = np.dot(d, (A.dot(d)))
         if 0 <= dBd <= 3 * float64eps:
             return z, 0
         # z is both a descent direction and a direction of non-positive curvature
@@ -122,6 +154,7 @@ def inner_newton_cg(z0, g, r, d, A, tol, cg_max_iter):
             else:
                 return z, 0
 
+        # Continue iterating
         alpha = rs_old / dBd
         r += alpha * (A.dot(d))
         z += alpha * d

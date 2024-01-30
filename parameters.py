@@ -1,15 +1,17 @@
+
 """
 Parameters.py is used for user input.
 The following class contains variable assignments used in the code
 """
-from typing import List, Optional
 from datetime import datetime
+from typing import Optional
+
+import numpy as np
 
 from energyminimization.solvers.solver import MinimizationType
 from result_handling.output_handler import OutputHandlerParameters
 from result_handling.pickle_handler import PickleHandlerParameters
 from visualization.visualize_lattice import VisualizerParameters
-import numpy as np
 
 
 class Parameters:
@@ -27,37 +29,27 @@ class Parameters:
     # (2) Triangular
     # (3) Square
     lattice_type: int = 2
-    lattice_length: int = 50
-    lattice_height: float = 50
+    lattice_length: int = 15
+    lattice_height: float = 15
 
     # Generic networks have slight displacements in node positions
     is_generic: bool = False
-    d_shift: float = 0.0
-
-    # ----- Bond Occupation Protocol -----
-    # When we remove bonds, this is our stopping criteria: shear modulus is below this value
-    obj_tolerance = 1e-8
-
-    # "Water Basin" approach: each bond is assigned a random number based on a seed. We then gradually
-    #   increase p by [p_increment] and add the bond if it is greater than the seeded number
-    random_seed: Optional[int] = 123
-    # Whether to add bonds starting from [low_prob_fill_basin] or remove bonds starting from [high_prob_fill_basin]
-    basin_add: bool = False
-    # Whether we should fill basin with p, or simply add/remove bonds based on the order they would be added
-    use_basin: bool = False
-    p_delta: float = 0.01
-    # If [ending_prob_fill_basin] is greater than the threshold for a thermodynamically legal network, then threshold
-    low_prob_fill_basin: float = 0.5
-    high_prob_fill_basin = .65
+    d_shift: float = 0.01
 
     # ----- Network generation -----
     # For oriented networks, which direction to prefer (0 = horizontal, 1 = right, 2 = left
     target_direction: int = 0
+    # pc_strength is the orientation strength "r" (0 <= pc_strength < 1)
+    strengths = [1.0, 1.1, 1.2, 1.3, 1.4]
+    pc_strength = strengths[4]
 
-    # pc_strength is the correlation/polarized strength (0 <= pc_strength < 1)
-    # Ignored if bond_generation is 0
-    strengths = [1.0]
-    pc_strength = strengths[0]
+    # ----- Bond Occupation Protocol -----
+    # Random seed for reproducibility
+    random_seed: Optional[int] = np.random.SeedSequence().entropy
+    # Starting p_fill value
+    prob_fill_high = 0.68
+    # When we remove bonds, this is our stopping criteria: all the moduli are below this value
+    obj_tolerance = 1e-8
 
     # ----- Mechanical Properties -----
     # alpha, kappa, mu: stretch, bend, transverse moduli
@@ -65,17 +57,15 @@ class Parameters:
     bend_mod = 0.0
     tran_mod = 0
 
+    # --- Lattice Shearing ---
+    # Shear strain (gamma). Each node is sheared by equation: delta_x = hor_shear * (height-lattice_height/2)
+    hor_shear = 0.001
+
     # ----- Energy Minimization -----
     # Method to minimize the energy
-    minimization_method: MinimizationType = MinimizationType.LINEAR_PRE
-    # Minimization Tolerances: see minimization methods. For linear system this is norm(residual) <= tolerance
+    minimization_method: MinimizationType = MinimizationType.LINEAR
+    # Minimization Tolerances: see minimization methods. For linear systems this is usually norm(residual) <= tolerance
     tolerance = 1e-8
-
-    # --- Lattice Shearing ---
-    # Direction to shear the lattice (can be used as multiplier for [hor_shear]).
-    shear_dir = 1
-    # Shear strain (gamma). Each node is sheared by equation: delta_x = hor_shear * (height-lattice_height/2)
-    hor_shear = 0.01
 
     # ----- Lattice pickling -----
     # All the parameters for handling pickling and visualization output
@@ -95,15 +85,15 @@ class Parameters:
     # ----- Output Handling -----
     # (See OutputHandlerParameters for more details)
     today_date = datetime.now().strftime("%m-%d-%y-%H")
-    run_folder_name: str = f"seed={str(random_seed)[:7]}-r={pc_strength}"
+    run_folder_name: str = f"{lattice_length}-{str(random_seed)[:7]}-{pc_strength}"
 
     output_handler_parameters = OutputHandlerParameters(
         inc_p=True,
         inc_shear_modulus=True,
-        inc_ind_energies=True,
-        inc_non_affinity=True,
-        inc_bond_counts=True,
-        inc_backbone_count=True,
+        inc_ind_energies=False,
+        inc_non_affinity=False,
+        inc_bond_counts=False,
+        inc_backbone_count=False,
         output_path="outputs",
         run_folder_name=run_folder_name,
         output_file="results.csv",
@@ -114,7 +104,7 @@ class Parameters:
     visualizer_parameters = VisualizerParameters(
         draw_nodes=True,
         draw_bonds=True,
-        draw_pbc=True,
+        draw_pbc=False,
         node_color="black",
         bond_color="black",
         hor_shear=hor_shear

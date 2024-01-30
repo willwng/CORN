@@ -4,7 +4,7 @@ matrix_helper.py is used to create necessary matrices for the minimization algor
 from typing import List, Tuple, Dict
 
 import numpy as np
-from scipy.sparse import csr_matrix, diags
+from scipy.sparse import csr_matrix
 
 from energyminimization.energies.bend import get_bend_hessian
 from energyminimization.energies.stretch import get_stretch_hessian
@@ -100,33 +100,6 @@ def shear_pos_matrix(
             sheared_pos_matrix[n_id][0] += hor * (sheared_pos_matrix[n_id][0] - min_x)
         sheared_pos_matrix[n_id][1] += comp * (sheared_pos_matrix[n_id][1])
     return sheared_pos_matrix
-
-
-def create_boundary_matrix(
-        lattice: AbstractLattice, pos_matrix: np.ndarray
-) -> List[List[None]]:
-    """
-    Creates the bounds used in minimization. Each node is given an upper and
-    lower bound in the form [low, up]
-    for each dimension (x, y). Top and bottom nodes should be stationary
-
-    :param lattice: lattice object
-    :type lattice: Object that inherits AbstractLattice
-    :param pos_matrix: position matrix of the current lattice
-        (does not have to be initial)
-    :type pos_matrix: shape (n, 2)
-    :return: A 2-element [low, high] array for each node and dimension.
-    [[low_x1, high_x1], [low_y1, high_y1], [low_x2, high_x2], ...]
-    """
-    nodes = lattice.get_nodes()
-    n = len(nodes)
-    bounds = [[None, None]] * (2 * n)
-    for node in nodes:
-        n_id = node.get_id()
-        if node.is_boundary():
-            bounds[2 * n_id] = [pos_matrix[n_id][0], pos_matrix[n_id][0]]
-            bounds[2 * n_id + 1] = [pos_matrix[n_id][1], pos_matrix[n_id][1]]
-    return bounds
 
 
 def verify_r_matrix(
@@ -252,72 +225,6 @@ def create_u_matrix(pos_matrix: np.ndarray, init_pos: np.ndarray) -> np.ndarray:
     :return: Shape (n, 2) matrix containing displacement field
     """
     return (pos_matrix - init_pos).reshape((-1, 2))
-
-
-def get_projection_matrices(lattice: AbstractLattice) -> Tuple[csr_matrix, csr_matrix, csr_matrix]:
-    """
-    Computes the projection matrices as described in the correlated networks paper
-    p_r_to_n is the projection matrix from the non-boundary nodes to full n dimensions
-    p_n_to_r is the opposite of p_r_to_n
-    i_boundary is the selection operator for boundary nodes
-    """
-    r_nodes = [node for node in lattice.get_nodes() if not node.is_boundary()]
-    n, r = len(lattice.get_nodes()), len(r_nodes)
-    # Arrays to create the sparse projection matrix
-    rows, cols = np.zeros(2 * r, dtype=np.uint32), np.zeros(2 * r, dtype=np.uint32)
-    data = np.ones(2 * r, dtype=np.uint8)
-    # Selection operator for boundary nodes (1 if corresponding to boundary node, 0 otherwise)
-    i_boundary_lookup = np.zeros(2 * n, dtype=np.uint8)
-    i = 0  # Iteration number for nodes in R
-    for node in lattice.get_nodes():
-        if not node.is_boundary():
-            rows[i], cols[i] = 2 * node.get_id(), 2 * i
-            rows[r + i], cols[r + i] = 2 * node.get_id() + 1, 2 * i + 1
-            i += 1
-        else:
-            i_boundary_lookup[2 * node.get_id()] = 1
-            i_boundary_lookup[2 * node.get_id() + 1] = 1
-    i_boundary = diags(i_boundary_lookup, dtype=np.uint8, shape=(2 * n, 2 * n))
-    p_r_to_n = csr_matrix((data, (rows, cols)), dtype=np.uint8, shape=(2 * n, 2 * r))
-    return p_r_to_n, p_r_to_n.T.tocsr(), i_boundary
-
-
-def get_box_projection(lattice: AbstractLattice) -> Tuple[csr_matrix, csr_matrix]:
-    """
-    Computes the projection matrix for only nodes within the box
-    """
-    length, height = max([node.x for node in lattice.get_nodes()]), max([node.y for node in lattice.get_nodes()])
-    box_l, box_r = 0.1 * length, 0.9 * length
-    box_b, box_t = 0.1 * height, 0.9 * height
-    box_nodes = [node for node in lattice.get_nodes() if box_l <= node.x <= box_r and box_b <= node.y <= box_t]
-    n, r = len(lattice.get_nodes()), len(box_nodes)
-    # Arrays to create the sparse projection matrix
-    rows, cols = np.zeros(2 * r, dtype=np.uint32), np.zeros(2 * r, dtype=np.uint32)
-    data = np.ones(2 * r, dtype=np.uint8)
-    i = 0
-    for node in lattice.get_nodes():
-        x, y = node.get_xy()
-        # Inside the box
-        if box_l <= x <= box_r and box_b <= y <= box_t:
-            rows[i], cols[i] = 2 * node.get_id(), 2 * i
-            rows[r + i], cols[r + i] = 2 * node.get_id() + 1, 2 * i + 1
-            i += 1
-    p_box_to_n = csr_matrix((data, (rows, cols)), dtype=np.uint8, shape=(2 * n, 2 * r))
-    return p_box_to_n, p_box_to_n.T.tocsr()
-
-
-def get_force_mask(lattice: AbstractLattice) -> csr_matrix:
-    """
-    Computes the force mask to set forces to zero for boundary nodes
-    """
-    n = len(lattice.get_nodes())
-    i_mask_lookup = np.zeros(2 * n, dtype=np.uint8)
-    for node in lattice.get_nodes():
-        if not node.is_boundary():
-            i_mask_lookup[2 * node.get_id()] = 1
-            i_mask_lookup[2 * node.get_id() + 1] = 1
-    i_mask = diags(i_mask_lookup, dtype=np.uint8, shape=(2 * n, 2 * n))
-    return i_mask
 
 
 class KMatrixResult:

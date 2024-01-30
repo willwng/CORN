@@ -1,8 +1,6 @@
-from enum import Enum
 from typing import List, Optional, Any
 
 import numpy as np
-from scipy.optimize import minimize
 from scipy.sparse import spmatrix, csr_matrix
 
 import energyminimization.energies.stretch_nonlinear as snl
@@ -10,17 +8,8 @@ import energyminimization.matrix_helper as pos
 from energyminimization.matrix_helper import KMatrixResult
 from energyminimization.solvers.conjugate_gradient import conjugate_gradient, get_matrix_precondition, \
     hybrid_conjugate_gradient
+from energyminimization.solvers.minimization_type import MinimizationType
 from lattice.abstract_lattice import AbstractLattice
-
-
-class MinimizationType(Enum):
-    LINEAR = 0
-    LINEAR_RELAX = 1
-    LINEAR_FIRE = 2
-    LINEAR_GPU = 3
-    LINEAR_PRE = 4
-    LINEAR_PRE_GPU = 5
-    NONLINEAR = 6
 
 
 class ReusableResults:
@@ -260,8 +249,19 @@ def nonlinear_solve(params: SolveParameters):
     # info = 0 if res.success else 1
     from energyminimization.solvers.newton import line_search_newton_cg
     pre = False
+
     u_relaxed, info = line_search_newton_cg(x0=u_0, fun=compute_total_energy, jac=compute_total_gradient,
                                             hess=compute_total_hessian, pre=pre)
+
+    # hess = compute_total_hessian(u_0)
+    # eigs = np.linalg.eigvalsh(hess.toarray())
+    # print(np.min(eigs), np.max(eigs))
+    # print(eigs.size, hess.shape)
+    # hess = compute_total_hessian(u_relaxed)
+    # eigs = np.linalg.eigvalsh(hess.toarray())
+    # print(np.min(eigs), np.max(eigs))
+    # print(eigs.size, hess.shape)
+    # quit()
 
     final_pos = params.init_pos + u_relaxed.reshape((-1, 2))
     final_energy = compute_total_energy(u=u_relaxed)

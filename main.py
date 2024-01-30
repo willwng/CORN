@@ -200,7 +200,7 @@ def run_basin_protocol(lattice: AbstractLattice, output_handler: OutputHandler):
 
     # The threshold of p must be less than p_max, otherwise the threshold can be larger than 1
     r = Parameters.pc_strength
-    p_max = min((1 / 3) + (2 / (3 * r)), Parameters.high_prob_fill_basin)
+    p_max = min((1 / 3) + (2 / (3 * r)), Parameters.prob_fill_high)
 
     # Gradually increase/decrease p (fill/drain the basin) until p_max or obj_tolerance is reached
     prev_final_pos = None
