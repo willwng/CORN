@@ -1,6 +1,7 @@
 from typing import List, Optional, Any
 
 import numpy as np
+from scipy.optimize import minimize
 from scipy.sparse import spmatrix, csr_matrix
 
 import energyminimization.energies.stretch_nonlinear as snl
@@ -243,10 +244,10 @@ def nonlinear_solve(params: SolveParameters):
     # u_relaxed, info = back_tracking_newton(x0=u_affine, f=compute_total_energy, df=compute_total_gradient,
     #                                        hess=compute_total_hessian)
 
-    # res = minimize(x0=u_0, fun=compute_total_energy, jac=compute_total_gradient, hess=compute_total_hessian,
-    #                method='trust-ncg')
-    # u_relaxed = res.x
-    # info = 0 if res.success else 1
+    res = minimize(x0=u_0, fun=compute_total_energy, jac=compute_total_gradient, hess=compute_total_hessian,
+                   method='trust-ncg')
+    u_relaxed = res.x
+    info = 0 if res.success else 1
     from energyminimization.solvers.newton import line_search_newton_cg
     pre = False
 
