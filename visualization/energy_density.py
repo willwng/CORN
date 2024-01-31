@@ -7,8 +7,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.spatial import Voronoi, voronoi_plot_2d
 
-from visualization.visualize_lattice import plot_bond
-
 
 def add_energy_node(node, energy_arr, bond_energy):
     index = node.get_id()
@@ -56,8 +54,8 @@ def plot_voronoi(vor, densities, pos_matrix, lattice, filename):
             plt.fill(*zip(*polygon), color=mapper.to_rgba(densities[r]))
 
     # Plot the overlaying bonds
-    for bond in lattice.get_bonds():
-        plot_bond(bond, pos_matrix, lattice, "black", False)
+    # for bond in lattice.get_bonds():
+    #     plot_bond(bond, pos_matrix, lattice, "black", False)
 
     plt.axis("scaled")
     plt.title("Energy Density Voronoi Diagram")
