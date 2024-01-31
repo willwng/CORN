@@ -7,138 +7,6 @@ import numpy as np
 import seaborn as sns
 
 
-def plot_bond(
-        b,
-        pos_matrix,
-        # bond_length_matrix,
-        lattice,
-        bond_color,
-        draw_edge,
-        rigid_edges=None,
-        largest_cluster=None,
-        i_bond=0,
-):
-    # Line styles for various types of bonds
-    thickness: float = 1 if lattice.get_length() < 200 else 0.3
-    # If the bond is buckled, then the draw the line dashed
-    line_style = "solid"
-    # if is_bond_buckled(b, bond_length_matrix):
-    #     line_style = "dashed"
-    if b.is_hor_pbc():
-        line_style = "dashed"
-    # In the case we want to show rigid clusters (clusters w/ more than 2 bonds)
-    if rigid_edges is None:
-        rigid_edges = []
-    if len(rigid_edges) > i_bond:
-        if rigid_edges.count(rigid_edges[i_bond]) > 1 and rigid_edges[i_bond] != -1:
-            bond_color = "red"
-    # if in the largest cluster
-    if largest_cluster is None:
-        largest_cluster = []
-    elif b in largest_cluster:
-        bond_color = "red"
-
-    # Get the bonded node id's
-    n_1 = b.get_node1().get_id()
-    n_2 = b.get_node2().get_id()
-    # Normal bonds
-    # colors = ["r", "g", "b"]
-    if b.exists() and not b.is_hor_pbc() and not b.is_top_pbc():
-        plt.plot(
-            [pos_matrix[n_1][0], pos_matrix[n_2][0]],
-            [pos_matrix[n_1][1], pos_matrix[n_2][1]],
-            bond_color,
-            linewidth=thickness,
-            linestyle=line_style,
-            # color=colors[b.get_direction()]
-        )
-    # Periodic boundary condition bonds
-    if b.exists and b.is_hor_pbc() and b.is_top_pbc() and draw_edge:
-        adjustment = [-lattice.get_length(), -lattice.get_height() - lattice.height_increment]
-        plt.plot(
-            [pos_matrix[n_1][0] + adjustment[0], pos_matrix[n_2][0]],
-            [pos_matrix[n_1][1] + adjustment[1], pos_matrix[n_2][1]],
-            "blue",
-            linewidth=thickness,
-            linestyle=line_style,
-        )
-        plt.plot(
-            [pos_matrix[n_2][0] - adjustment[0], pos_matrix[n_1][0]],
-            [pos_matrix[n_2][1] - adjustment[1], pos_matrix[n_1][1]],
-            "blue",
-            linewidth=thickness,
-            linestyle=line_style,
-        )
-        return
-    if b.exists() and b.is_hor_pbc() and draw_edge:
-        adjustment = (
-            lattice.length
-            if pos_matrix[n_1][0] < pos_matrix[n_2][0]
-            else -1 * lattice.length
-        )
-        plt.plot(
-            [pos_matrix[n_1][0] + adjustment, pos_matrix[n_2][0]],
-            [pos_matrix[n_1][1], pos_matrix[n_2][1]],
-            "blue",
-            linewidth=thickness,
-            linestyle=line_style,
-        )
-        plt.plot(
-            [pos_matrix[n_2][0] - adjustment, pos_matrix[n_1][0]],
-            [pos_matrix[n_2][1], pos_matrix[n_1][1]],
-            "blue",
-            linewidth=thickness,
-            linestyle=line_style,
-        )
-    if b.exists() and b.is_top_pbc() and draw_edge:
-        adjustment = (
-            (lattice.get_height() + lattice.height_increment)
-            if pos_matrix[n_1][1] < pos_matrix[n_2][1]
-            else -1 * (lattice.get_height() + lattice.height_increment)
-        )
-        plt.plot(
-            [pos_matrix[n_1][0], pos_matrix[n_2][0]],
-            [pos_matrix[n_1][1] + adjustment, pos_matrix[n_2][1]],
-            "blue",
-            linewidth=thickness,
-            linestyle=line_style,
-        )
-        plt.plot(
-            [pos_matrix[n_2][0], pos_matrix[n_1][0]],
-            [pos_matrix[n_2][1] - adjustment, pos_matrix[n_1][1]],
-            "blue",
-            linewidth=thickness,
-            linestyle=line_style,
-        )
-    return
-
-
-def plot_node(n, pos_matrix, lattice, node_color, draw_edge):
-    node_id = n.get_id()
-    coordinates = pos_matrix[node_id]
-    # plt.text(coordinates[0], coordinates[1], str(n.get_id()), color="red", fontsize=5)
-    # Plot the edge nodes twice
-    # if n.is_edge() and draw_edge:
-    #     adjustment = (
-    #         lattice.length
-    #         if n.get_xy()[0] < lattice.length / 2
-    #         else -1 * lattice.length
-    #     )
-    #     plt.scatter((coordinates[0] + adjustment), coordinates[1], s=0.5, c="blue", marker="s")
-    # if n.is_top_edge() and draw_edge:
-    #     adjustment = (
-    #         lattice.get_height() + lattice.height_increment
-    #         if n.get_xy()[1] < lattice.get_height() / 2
-    #         else -1 * lattice.get_height()
-    #     )
-    #     plt.scatter((coordinates[0]), coordinates[1] - adjustment, s=0.5, c="orange", marker="s")
-    # plt.scatter(coordinates[0], coordinates[1], s=5, c="red")
-    # elif n.is_hinge():
-    #     plt.scatter(coordinates[0], coordinates[1], s=0.5, c="orange")
-    # else:
-    #     plt.scatter(coordinates[0], coordinates[1], s=0.5, c=node_color)
-
-
 class VisualizerParameters:
     draw_nodes: bool
     draw_bonds: bool
@@ -159,6 +27,12 @@ class VisualizerParameters:
         self.hor_shear = hor_shear
 
 
+def plot_bonds(pos_matrix, i, j, lattice, color):
+    thickness: float = 1 if lattice.get_length() < 200 else 0.3
+    plt.plot([pos_matrix[i, 0], pos_matrix[j, 0]], [pos_matrix[i, 1], pos_matrix[j, 1]],
+             color=color, linewidth=thickness)
+
+
 class Visualizer:
     params: VisualizerParameters
 
@@ -172,11 +46,6 @@ class Visualizer:
         y_max = 1.1 * lattice.get_height()
         plot_bounds = (x_min, x_max, y_min, y_max)
         return plot_bounds
-
-    def plot_bonds(self, pos_matrix, i, j, lattice, color):
-        thickness: float = 1 if lattice.get_length() < 200 else 0.3
-        plt.plot([pos_matrix[i, 0], pos_matrix[j, 0]], [pos_matrix[i, 1], pos_matrix[j, 1]],
-                 color=color, linewidth=thickness)
 
     def draw_nodes(self, pos_matrix):
         plt.scatter(pos_matrix[:, 0], pos_matrix[:, 1], s=0.5, c=self.params.node_color)
@@ -225,12 +94,14 @@ class Visualizer:
         if self.params.draw_bonds:
             # Draw inner bonds
             i_in, j_in = i[idx_in], j[idx_in]
-            self.plot_bonds(pos_matrix, i_in, j_in, lattice, color=self.params.bond_color)
+            plot_bonds(pos_matrix, i_in, j_in, lattice, color=self.params.bond_color)
 
         if self.params.draw_nodes:
             self.draw_nodes(pos_matrix)
 
         try:
+            plt.axis('off')
+            plt.tight_layout()
             plt.savefig(filename)
             print("Saved visualization at", filename)
         except PermissionError:
