@@ -1,94 +1,13 @@
 """
 This file contains several numerical optimization methods that are Newton or Quasi-Newton.
 """
-from typing import Callable
-
 import numpy as np
-import torch
 from scipy.optimize import line_search
-from scipy.sparse import csr_matrix, diags, linalg
-
-from energyminimization.solvers.conjugate_gradient import conjugate_gradient, get_matrix_precondition
 
 
-def inexact_modified_chol(A: csr_matrix):
+def line_search_newton_cg(fun, x0, jac, hess, x_tol=1e-8):
     """
-    Inexact modified Cholesky factorization
-    """
-    # Compute T = diag(||Ae1||, ||Ae2||, ..., ||Aen||), where ei is the ith coordinate vector
-    T_diag = linalg.norm(A, axis=1)
-    T_sqrt_inv_diags = 1.0 / np.sqrt(T_diag)
-    T_sqrt_inv = diags(T_sqrt_inv_diags)
-
-    A_tilde = T_sqrt_inv @ A @ T_sqrt_inv
-    beta = linalg.norm(A_tilde)
-    # Compute a shift to ensure positive definiteness
-    A_diag = A.diagonal()
-    if np.min(A_diag) > 0:
-        alpha = 0
-    else:
-        alpha = beta / 2
-
-    for k in range(100):
-        try:
-            a_torch, solver = get_matrix_precondition(A_tilde, perturb=alpha, use_gpu=False)
-            return a_torch, solver
-        except ValueError:
-            alpha = max(2 * alpha, beta / 2)
-
-    return None, None
-
-
-def newton(
-        x: np.ndarray,
-        df: Callable[[np.ndarray], np.ndarray],
-        hess: Callable[[np.ndarray], csr_matrix]
-):
-    g = df(x)
-    h = hess(x)
-    # Solve for s = -H^{-1}g
-    s, info = conjugate_gradient(h, np.zeros_like(g), -g, tol=1e-8, use_gpu=False)
-    return s, g
-
-
-def back_tracking_newton(
-        x0: np.ndarray,
-        f: Callable[[np.ndarray], float],
-        df: Callable[[np.ndarray], np.ndarray],
-        hess: Callable[[np.ndarray], csr_matrix],
-        atol: float = 1e-8
-):
-    x = x0.copy()
-    f0 = f(x)
-    alpha = 1.0
-    c1 = 1e-4
-    max_iter = len(x0) * 100
-
-    s, g = newton(x, df, hess)
-    for _ in range(max_iter):
-        x_new = x + alpha * s
-        # Check Armijo condition
-        g_dot_s = np.dot(g, s)
-        if f(x_new) <= f0 + c1 * alpha * g_dot_s:
-            x = x_new
-            # Reset step size and recompute Newton step
-            alpha = 1.0
-            s, g = newton(x, df, hess)
-            f0 = f(x)
-
-            # Check for convergence
-            if np.linalg.norm(g) < atol:
-                return x, 0
-
-        else:
-            alpha *= 0.5
-
-    return x, 1
-
-
-def line_search_newton_cg(fun, x0, jac, hess, x_tol=1e-8, pre: bool = False):
-    """
-    Inner loop for Newton-CG
+    Newton-CG method, which uses conjugate gradient to solve for the search direction.
     """
     x = x0.copy()
     max_iter = len(x0) * 100
@@ -101,19 +20,13 @@ def line_search_newton_cg(fun, x0, jac, hess, x_tol=1e-8, pre: bool = False):
         g, A = jac(x), hess(x)
 
         # Stopping criteria for conjugate gradient methods
-        g_mag = np.add.reduce(np.abs(g))
+        g_mag = np.linalg.norm(g)
         tol = np.min([0.5, np.sqrt(g_mag)]) * g_mag
 
         # Conjugate gradient steps to find step direction
         z0 = np.zeros_like(x)
         r, d, p = g.copy(), -g, -g
-        if pre:
-            # A, M = get_matrix_precondition(A, perturb=1e-8, use_gpu=False)
-            _, M = inexact_modified_chol(A)
-            p, cg_info = pre_inner_newton_cg(z0=z0, g=g, r=r, d=d, A=A, M=M, tol=tol, cg_max_iter=cg_max_iter)
-            p = p.cpu().numpy()
-        else:
-            p, cg_info = inner_newton_cg(z0=z0, g=g, r=r, d=d, A=A, tol=tol, cg_max_iter=cg_max_iter)
+        p, cg_info = inner_newton_cg(z0=z0, g=g, r=r, d=d, A=A, tol=tol, cg_max_iter=cg_max_iter)
 
         if cg_info == 1:  # CG did not converge
             return x, 2
@@ -124,7 +37,9 @@ def line_search_newton_cg(fun, x0, jac, hess, x_tol=1e-8, pre: bool = False):
             return x, 3
         update = alpha * p
         x += update
-        if np.add.reduce(np.abs(update)) < x_tol:
+
+        # Termination condition
+        if np.linalg.norm(update) < x_tol:
             return x, 0
     return x, 1
 
@@ -140,7 +55,7 @@ def inner_newton_cg(z0, g, r, d, A, tol, cg_max_iter):
     rs_old = np.dot(r, r)
     for j in range(cg_max_iter):
         # Check for convergence
-        if np.add.reduce(np.abs(r)) <= tol:
+        if np.linalg.norm(r) < tol:
             return z, 0
 
         # Curvature is small
@@ -168,11 +83,11 @@ def inner_newton_cg(z0, g, r, d, A, tol, cg_max_iter):
         return z0, 1
 
 
-def get_boundaries_intersections(z, d, trust_radius):
+def compute_tau(z, d, trust_radius):
     """
     Solve the scalar quadratic equation ||z + t d|| == trust_radius.
     This is like a line-sphere intersection.
-    Return the two values of t, sorted from low to high.
+    Return the two values of t, ta and tb, such that ta <= tb.
     """
     a = np.dot(d, d)
     b = 2 * np.dot(z, d)
@@ -181,94 +96,117 @@ def get_boundaries_intersections(z, d, trust_radius):
     aux = b + np.copysign(sqrt_discriminant, b)
     ta = -aux / (2 * a)
     tb = -2 * c / aux
-    return sorted([ta, tb])
+    return ta, tb
 
 
-def cg_steihaug(fun, x0, jac, hess, max_iter, tol, trust_radius):
+def tr_predict(f0, p, g, A):
+    """
+    Predict the value of the objective function at the next step
+    """
+    return f0 + np.dot(g, p) + 0.5 * np.dot(p, A.dot(p))
+
+
+def tr_solve(f0, x, g, A, max_iter, tol, trust_radius):
     """
     Inner loop for Newton-CG, with trust region constraint
     """
-    z = np.zeros_like(x0)
-    r = jac(x0)
+    # Check if we are already at a minimum
+    z0 = np.zeros_like(x)
+    if np.linalg.norm(g) <= tol:
+        return z0, 0
+
+    # Initialize
+    z = z0.copy()
+    r = g.copy()
     d = -r
 
-    if np.add.reduce(np.abs(r)) <= tol:
-        return z, 0
-
-    A = hess(x0)
     rs = np.dot(r, r)
     rs_old = rs
 
+    # Iterate to solve for the search direction
     for j in range(max_iter):
-        dBd = np.dot(d, (A.dot(d)))
+        Ad = A.dot(d)
+        dAd = np.dot(d, Ad)
         # Direction of non-positive curvature
-        if dBd <= 0:
-            ta, tb = get_boundaries_intersections(z, d, trust_radius)
-            pa = z + ta * d
-            pb = z + tb * d
-            if fun(x0 + pa) < fun(x0 + pb):
+        if dAd <= 0:
+            ta, tb = compute_tau(z, d, trust_radius)
+            pa, pb = z + ta * d, z + tb * d
+            # Choose the direction with the lowest predicted objective function value
+            if tr_predict(f0, pa, g, A) < tr_predict(f0, pb, g, A):
                 return pa, 1
             else:
                 return pb, 1
 
-        alpha = rs / dBd
-        z += alpha * d
-        # Check if we have reached the trust region boundary
-        if np.add.reduce(np.abs(z)) >= trust_radius:
-            _, tau = get_boundaries_intersections(z, d, trust_radius)
+        alpha = rs_old / dAd
+        z_new = z + alpha * d
+        # Move back to the boundary of the trust region
+        if np.linalg.norm(z) >= trust_radius:
+            # We require tau >= 0
+            _, tau = compute_tau(z, d, trust_radius)
             p = z + tau * d
             return p, 1
 
-        r += alpha * (A.dot(d))
+        # Update residual, check for convergence
+        r += alpha * Ad
         rs_new = np.dot(r, r)
-        if np.add.reduce(np.abs(r)) <= tol:
-            return z, 0
+        if np.sqrt(rs_new) < tol:
+            return z_new, 0
 
         beta = rs_new / rs_old
         d = -r + beta * d
         rs_old = rs_new
+        z = z_new
     else:
-        return z, 1
+        return z, 2
 
 
-def pre_inner_newton_cg(z0, g, r, d, A, M, tol, cg_max_iter):
-    """
-    Inner loop for Newton-CG, with preconditioning
-    """
-    device = "cpu"
-    # z is the resulting step direction
-    z = torch.tensor(z0.copy(), device=device)
-    r = torch.tensor(r, device=device)
-    d = torch.tensor(d, device=device)
-    float64eps = np.finfo(np.float64).eps
+def trust_region_newton_cg(fun, x0, jac, hess, g_tol=1e-8):
+    # --- Initialize trust-region ---
+    trust_radius = 1.0
+    max_trust_radius = 1e3
+    eta = 0.15
 
-    rs_old = torch.dot(r, r)
-    for j in range(cg_max_iter):
-        if torch.sum(torch.abs(r)) <= tol:
-            return z, 0
-        dBd = d @ (A @ d)
-        # Curvature is small
-        if 0 <= dBd <= 3 * float64eps:
-            return z, 0
-        # z is both a descent direction and a direction of non-positive curvature
-        elif dBd <= 0:
-            if j == 0:
-                return -g, 0
-            else:
-                return z, 0
+    x = x0.copy()
+    max_iter = len(x0) * 100
+    cg_max_iter = len(x0) * 200
 
-        y = torch.ones_like(r)
-        M.solve(r, y)
-        # y = M @ r
+    f_old = fun(x)
 
-        alpha = torch.dot(r, y) / dBd
-        r += alpha * (A @ d)
-        z += alpha * d
+    for k in range(max_iter):
+        g, A = jac(x), hess(x)
+        g_mag = np.linalg.norm(g)
+        # Termination condition
+        if g_mag < g_tol:
+            return x, 0
 
-        rs_new = torch.dot(r, r)
-        beta = rs_new / rs_old
-        d = -r + beta * d
+        # Solve the trust-region sub-problem
+        cg_tol = min(0.5, np.sqrt(g_mag)) * g_mag
+        p, bound = tr_solve(f0=f_old, x=x, g=g, A=A, max_iter=cg_max_iter, tol=cg_tol,
+                            trust_radius=trust_radius)
+        # Did not find a valid step
+        if bound == 2:
+            return x, 2
+        x_prop = x + p
+        f_prop = fun(x_prop)
 
-        rs_old = rs_new
-    else:
-        return torch.tensor(z0.copy(), device=device), 1
+        # Actual reduction and predicted reduction
+        df = f_old - f_prop
+        df_pred = -(np.dot(g, p) + 0.5 * np.dot(p, A.dot(p)))
+
+        # Predicted reduction is not positive
+        # if df_pred <= 0:
+        #     return x, 1
+
+        # Updating trust region radius based on gain ratio
+        rho = df / df_pred
+        if rho < 0.25:  # poor prediction, reduce trust radius
+            trust_radius *= 0.25
+        elif rho > 0.75 and bound:  # good step and on the boundary
+            trust_radius = min(2 * trust_radius, max_trust_radius)
+
+        # Accept step
+        if rho > eta:
+            x = x_prop
+            f_old = f_prop
+
+    return x, 1

@@ -244,15 +244,17 @@ def nonlinear_solve(params: SolveParameters):
     # u_relaxed, info = back_tracking_newton(x0=u_affine, f=compute_total_energy, df=compute_total_gradient,
     #                                        hess=compute_total_hessian)
 
-    res = minimize(x0=u_0, fun=compute_total_energy, jac=compute_total_gradient, hess=compute_total_hessian,
-                   method='trust-ncg')
-    u_relaxed = res.x
-    info = 0 if res.success else 1
+    # res = minimize(x0=u_0, fun=compute_total_energy, jac=compute_total_gradient, hess=compute_total_hessian,
+    #                method='trust-ncg')
+    # u_relaxed = res.x
+    # info = 0 if res.success else 1
     from energyminimization.solvers.newton import line_search_newton_cg
-    pre = False
+    from energyminimization.solvers.newton import trust_region_newton_cg
 
-    u_relaxed, info = line_search_newton_cg(x0=u_0, fun=compute_total_energy, jac=compute_total_gradient,
-                                            hess=compute_total_hessian, pre=pre)
+    # u_relaxed, info = line_search_newton_cg(x0=u_0, fun=compute_total_energy, jac=compute_total_gradient,
+    #                                         hess=compute_total_hessian, x_tol=1e-5)
+    u_relaxed, info = trust_region_newton_cg(x0=u_0, fun=compute_total_energy, jac=compute_total_gradient,
+                                             hess=compute_total_hessian, g_tol=1e-5)
 
     # hess = compute_total_hessian(u_0)
     # eigs = np.linalg.eigvalsh(hess.toarray())
