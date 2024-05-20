@@ -2,7 +2,7 @@
 
 This code generates and minimizes the energy of a lattice/network
 
-<img src="https://media.github.coecis.cornell.edu/user/9399/files/84d5f6f3-08db-4fad-ae37-a1d51e081906" width="300">
+<img src="https://github.com/willwng/CORN/assets/8275672/922ac19e-9e6c-4860-852b-6e5d909308b6" width="300">
 
 ## Required Libraries
 See [requirements.txt](requirements.txt)
