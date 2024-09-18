@@ -1,6 +1,6 @@
 # CORN (Code of Relaxing Networks)
 
-Visit the [CORN Wiki](https://github.com/willwng/CORN/wiki)!. This code generates and minimizes the energy of a lattice/network:
+Visit the [CORN Wiki](https://github.com/willwng/CORN/wiki)! This code generates and minimizes the energy of a lattice/network:
 
 <img src="https://github.com/willwng/CORN/assets/8275672/922ac19e-9e6c-4860-852b-6e5d909308b6" width="300">
 
