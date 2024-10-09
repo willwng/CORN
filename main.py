@@ -6,6 +6,7 @@ To run the code:
 """
 import inspect
 import time
+from ast import Param
 from typing import Tuple, Optional, List
 
 import numpy as np
@@ -19,7 +20,7 @@ from lattice.abstract_lattice import AbstractLattice
 from lattice.generic_lattice import make_generic
 from lattice.lattice_factory import LatticeFactory
 from parameters import Parameters
-from result_handling.output_handler import OutputHandler, PickleHandler
+from result_handling.output_handler import OutputHandler, VisualizationHandler
 from visualization.visualize_lattice import Visualizer
 
 
@@ -81,20 +82,13 @@ def initialize_lattice(set_bonds_active: bool):
     """
     Initializes the lattice object (either by loading a pickle file or creating a new lattice)
     """
-    if Parameters.load_lattice:
-        lattice = LatticeFactory.load_lattice_from_pickle(
-            pickle_file=Parameters.load_lattice_pickle_file,
-            set_bonds_active=set_bonds_active
-        )
-        print(f"Lattice loaded from {Parameters.load_lattice_pickle_file}")
-    else:
-        lattice = LatticeFactory.create_lattice(
-            lattice_type=Parameters.lattice_type,
-            length=Parameters.lattice_length,
-            height=Parameters.lattice_height,
-            # Naive optimization: only set bonds active if bending is relevant
-            generate_pi_bonds=Parameters.bend_mod != 0,
-        )
+    lattice = LatticeFactory.create_lattice(
+        lattice_type=Parameters.lattice_type,
+        length=Parameters.lattice_length,
+        height=Parameters.lattice_height,
+        # Naive optimization: only set bonds active if bending is relevant
+        generate_pi_bonds=Parameters.bend_mod != 0,
+    )
 
     # Pre-compute bond directions
     [bond.get_direction() for bond in lattice.get_bonds()]
@@ -114,8 +108,8 @@ def get_moduli(
     init_pos = pos.create_pos_matrix(lattice=lattice)
     area_lattice = lattice.get_length() * lattice.get_height()
 
-    shear_strain = Parameters.hor_shear
-    transformation_matrices = pos.get_transformation_matrices(gamma=shear_strain)
+    shear_strain = Parameters.gamma
+    transformation_matrices = Parameters.transformations
     # --- Compute the response to each strain ---
     moduli, min_results = [], []
     reusable_results = None
@@ -125,7 +119,7 @@ def get_moduli(
                                                sheared_pos=sheared_pos, trans_matrix=trans_matrix,
                                                reusable_results=reusable_results)
         reusable_results = minimization_result.reusable_results
-        modulus = 2 * minimization_result.final_energy / (area_lattice * Parameters.hor_shear ** 2)
+        modulus = 2 * minimization_result.final_energy / (area_lattice * Parameters.gamma ** 2)
         print(f"Modulus for transformation {i}: {modulus}")
         moduli.append(modulus)
         min_results.append(minimization_result)
@@ -135,8 +129,6 @@ def get_moduli(
 def get_rng() -> np.random.Generator:
     # Get a random number generator (make new seed if required)
     seed = Parameters.random_seed
-    if seed is None:
-        seed = np.random.SeedSequence().entropy
     rng = np.random.default_rng(seed)
     return rng
 
@@ -199,7 +191,7 @@ def run_basin_protocol(lattice: AbstractLattice, output_handler: OutputHandler):
     lattice.update_active_bonds()
 
     # The threshold of p must be less than p_max, otherwise the threshold can be larger than 1
-    r = Parameters.pc_strength
+    r = Parameters.r_strength
     p_max = min((1 / 3) + (2 / (3 * r)), Parameters.prob_fill_high)
 
     # Gradually increase/decrease p (fill/drain the basin) until p_max or obj_tolerance is reached
@@ -222,7 +214,7 @@ def run_basin_protocol(lattice: AbstractLattice, output_handler: OutputHandler):
         p = get_bond_occupation(lattice=lattice, disp=False)
 
         # Termination conditions for adding: reach p_max. For removing: shear modulus is below tolerance
-        if max(moduli) < Parameters.obj_tolerance:
+        if max(moduli) < Parameters.moduli_tolerance:
             break
     return
 
@@ -244,7 +236,7 @@ def main():
 
     # Result are taken care of by the dedicated handlers
     visualizer = Visualizer(params=Parameters.visualizer_parameters)
-    pickle_handler = PickleHandler(params=Parameters.pickle_handler_parameters, visualizer=visualizer)
+    pickle_handler = VisualizationHandler(params=Parameters.pickle_handler_parameters, visualizer=visualizer)
 
     output_handler = OutputHandler(parameter_path=inspect.getfile(Parameters),
                                    params=Parameters.output_handler_parameters, pickle_handler=pickle_handler)

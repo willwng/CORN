@@ -1,37 +1,34 @@
-from typing import List, Optional, Any
+from typing import List, Optional
 
 import numpy as np
-from scipy.optimize import minimize
 from scipy.sparse import spmatrix, csr_matrix
 
 import energyminimization.energies.stretch_nonlinear as snl
 import energyminimization.matrix_helper as pos
 from energyminimization.matrix_helper import KMatrixResult
-from energyminimization.solvers.conjugate_gradient import conjugate_gradient, get_matrix_precondition, \
-    hybrid_conjugate_gradient
+from energyminimization.solvers.conjugate_gradient import conjugate_gradient
 from energyminimization.solvers.minimization_type import MinimizationType
+from energyminimization.solvers.newton import trust_region_newton_cg
 from lattice.abstract_lattice import AbstractLattice
 
 
 class ReusableResults:
-    """ Values that can be reused for minimization with the same p """
+    """ Values that can be reused for minimization with the same lattice and p"""
+    # All Hessians for inside bonds and PBC bonds
     k_matrices_in: KMatrixResult
     k_matrices_pbc: KMatrixResult
+    # Total Hessian for inside and PBC bonds
     k_matrix_in: spmatrix
     k_matrix_pbc: spmatrix
     k_matrix: spmatrix
-    a_matrix: Any
-    solver: Any
 
     def __init__(self, k_matrices_in: KMatrixResult, k_matrices_pbc: KMatrixResult, k_matrix_in: spmatrix,
-                 k_matrix_pbc: spmatrix, k_matrix: spmatrix, a_matrix: Any, solver: Any):
+                 k_matrix_pbc: spmatrix, k_matrix: spmatrix):
         self.k_matrices_in = k_matrices_in
         self.k_matrices_pbc = k_matrices_pbc
         self.k_matrix_in = k_matrix_in
         self.k_matrix_pbc = k_matrix_pbc
         self.k_matrix = k_matrix
-        self.a_matrix = a_matrix
-        self.solver = solver
 
 
 class SolveResult:
@@ -111,7 +108,7 @@ def setup_linear_system(params: SolveParameters):
     return k_matrices_in, k_matrices_pbc, k_matrices_in.k_total, k_matrices_pbc.k_total
 
 
-def linear_solve(params: SolveParameters, use_gpu: bool, use_pre: bool, reusable_results: Optional[ReusableResults]):
+def linear_solve(params: SolveParameters, reusable_results: Optional[ReusableResults]):
     """
     Solves the minimization problem with linearized energy by solving up a linear system and solving
      with conjugate gradient method (optionally GPU-accelerated and/or preconditioned)
@@ -120,20 +117,14 @@ def linear_solve(params: SolveParameters, use_gpu: bool, use_pre: bool, reusable
     if reusable_results is None:
         k_matrices_in, k_matrices_pbc, k_matrix_in, k_matrix_pbc = setup_linear_system(params=params)
         k_matrix = k_matrix_in + k_matrix_pbc
-        if use_pre:
-            a_matrix, solver = get_matrix_precondition(a=k_matrix, use_gpu=use_gpu, perturb=1e-12)
-        else:
-            a_matrix, solver = k_matrix, None
         reusable_results = ReusableResults(k_matrices_in=k_matrices_in, k_matrices_pbc=k_matrices_pbc,
-                                           k_matrix_in=k_matrix_in, k_matrix_pbc=k_matrix_pbc, k_matrix=k_matrix,
-                                           a_matrix=a_matrix, solver=solver)
+                                           k_matrix_in=k_matrix_in, k_matrix_pbc=k_matrix_pbc, k_matrix=k_matrix)
     else:
         k_matrices_in = reusable_results.k_matrices_in
         k_matrices_pbc = reusable_results.k_matrices_pbc
         k_matrix_in = reusable_results.k_matrix_in
         k_matrix_pbc = reusable_results.k_matrix_pbc
         k_matrix = reusable_results.k_matrix
-        a_matrix, solver = reusable_results.a_matrix, reusable_results.solver
 
     # Compute the energy it takes to transform the network without relaxation
     u_affine = pos.create_u_matrix(params.sheared_pos, params.init_pos).ravel()
@@ -153,16 +144,7 @@ def linear_solve(params: SolveParameters, use_gpu: bool, use_pre: bool, reusable
     # Solve K @ u_r = b (where b is the Jacobian). Use conjugate gradients since K is likely singular
     b = -(k_matrix_pbc @ params.correction_matrix.ravel())
 
-    if use_gpu and use_pre:
-        u_relaxed, info = hybrid_conjugate_gradient(a_torch=a_matrix, x0=u_0, b=b, solver=solver,
-                                                    tol=params.tolerance,
-                                                    use_gpu=True)
-    elif not use_gpu and use_pre:
-        u_relaxed, info = hybrid_conjugate_gradient(a_torch=a_matrix, x0=u_0, b=b, solver=solver,
-                                                    tol=params.tolerance,
-                                                    use_gpu=False)
-    else:
-        u_relaxed, info = conjugate_gradient(a=k_matrix, x0=u_0, b=b, tol=params.tolerance, use_gpu=False)
+    u_relaxed, info = conjugate_gradient(a=k_matrix, x0=u_0, b=b, tol=params.tolerance)
 
     if info == 1:
         print("Conjugate gradient did not converge")
@@ -237,34 +219,8 @@ def nonlinear_solve(params: SolveParameters):
         u_0 = pos.create_u_matrix(params.init_guess, params.init_pos).flatten()
     else:
         u_0 = u_affine
-
-    # u_relaxed, info = non_linear_conjugate_gradient(x0=u_0, f=compute_total_energy, df=compute_total_gradient,
-    #                                                 hess=compute_total_hessian)
-    # u_relaxed, info = optimize_fire(x0=u_0, df=compute_total_gradient)
-    # u_relaxed, info = back_tracking_newton(x0=u_affine, f=compute_total_energy, df=compute_total_gradient,
-    #                                        hess=compute_total_hessian)
-
-    # res = minimize(x0=u_0, fun=compute_total_energy, jac=compute_total_gradient, hess=compute_total_hessian,
-    #                method='trust-ncg')
-    # u_relaxed = res.x
-    # info = 0 if res.success else 1
-    from energyminimization.solvers.newton import line_search_newton_cg
-    from energyminimization.solvers.newton import trust_region_newton_cg
-
-    # u_relaxed, info = line_search_newton_cg(x0=u_0, fun=compute_total_energy, jac=compute_total_gradient,
-    #                                         hess=compute_total_hessian, x_tol=1e-5)
     u_relaxed, info = trust_region_newton_cg(x0=u_0, fun=compute_total_energy, jac=compute_total_gradient,
                                              hess=compute_total_hessian, g_tol=1e-5)
-
-    # hess = compute_total_hessian(u_0)
-    # eigs = np.linalg.eigvalsh(hess.toarray())
-    # print(np.min(eigs), np.max(eigs))
-    # print(eigs.size, hess.shape)
-    # hess = compute_total_hessian(u_relaxed)
-    # eigs = np.linalg.eigvalsh(hess.toarray())
-    # print(np.min(eigs), np.max(eigs))
-    # print(eigs.size, hess.shape)
-    # quit()
 
     final_pos = params.init_pos + u_relaxed.reshape((-1, 2))
     final_energy = compute_total_energy(u=u_relaxed)
@@ -277,13 +233,7 @@ def solve(params: SolveParameters, minimization_type: MinimizationType,
           reusable_results: Optional[ReusableResults]) -> SolveResult:
     """ Find the relaxed, minimal energy state of the network """
     if minimization_type == MinimizationType.LINEAR:
-        return linear_solve(params=params, use_gpu=False, use_pre=False, reusable_results=reusable_results)
-    elif minimization_type == MinimizationType.LINEAR_GPU:
-        return linear_solve(params=params, use_gpu=True, use_pre=False, reusable_results=reusable_results)
-    elif minimization_type == MinimizationType.LINEAR_PRE:
-        return linear_solve(params=params, use_gpu=False, use_pre=True, reusable_results=reusable_results)
-    elif minimization_type == MinimizationType.LINEAR_PRE_GPU:
-        return linear_solve(params=params, use_gpu=True, use_pre=True, reusable_results=reusable_results)
+        return linear_solve(params=params, reusable_results=reusable_results)
     if minimization_type == MinimizationType.NONLINEAR:
         return nonlinear_solve(params=params)
     else:

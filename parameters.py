@@ -1,34 +1,26 @@
-
 """
 Parameters.py is used for user input.
 The following class contains variable assignments used in the code
 """
 from datetime import datetime
-from typing import Optional
 
 import numpy as np
 
 from energyminimization.solvers.solver import MinimizationType
+from energyminimization.transformations import get_transformation_matrices
+from lattice.lattice_type import LatticeType
 from result_handling.output_handler import OutputHandlerParameters
-from result_handling.pickle_handler import PickleHandlerParameters
+from result_handling.pickle_handler import VisualizationHandlerParameters
 from visualization.visualize_lattice import VisualizerParameters
 
 
 class Parameters:
-    # ----- Lattice Properties -----
-    # --- Loading Lattice ---
-    # If [load_lattice] is True then the lattice object will be loaded from [load_lattice_pickle_file]
-    # Otherwise, a new lattice is created, and pickled into [save_lattice_pickle_file] if [create_pickle] is True
-    load_lattice = False
-    load_lattice_pickle_file = "prebuilt_lattices/triangular_100_101.pickle"
+    # Random seed for reproducibility (take first 8 digits of entropy - we don't need the full amount)
+    random_seed: int = np.random.SeedSequence().entropy
+    random_seed = int(str(random_seed)[0:8])
 
-    # --- Generating new lattice ---
-    # The following is for if the lattice is to be generated [load_lattice] = False)
-    # Type of lattice:
-    # (1) Kagome
-    # (2) Triangular
-    # (3) Square
-    lattice_type: int = 2
+    # ----- Lattice Properties -----
+    lattice_type: LatticeType = LatticeType.TRIANGULAR
     lattice_length: int = 15
     lattice_height: float = 15
 
@@ -37,29 +29,28 @@ class Parameters:
     d_shift: float = 0.01
 
     # ----- Network generation -----
-    # For oriented networks, which direction to prefer (0 = horizontal, 1 = right, 2 = left
+    # For oriented networks, which direction to prefer (0 = horizontal, 1 = right, 2 = left)
     target_direction: int = 0
-    # pc_strength is the orientation strength "r" (0 <= pc_strength < 1)
-    strengths = [1.0, 1.1, 1.2, 1.3, 1.4]
-    pc_strength = strengths[4]
+    # How much to prefer the target direction (1 = isotropic)
+    r_strength: float = 1.0
 
     # ----- Bond Occupation Protocol -----
-    # Random seed for reproducibility
-    random_seed: Optional[int] = np.random.SeedSequence().entropy
     # Starting p_fill value
-    prob_fill_high = 0.68
+    prob_fill_high: float = 0.68
     # When we remove bonds, this is our stopping criteria: all the moduli are below this value
-    obj_tolerance = 1e-8
+    moduli_tolerance: float = 1e-8
 
     # ----- Mechanical Properties -----
     # alpha, kappa, mu: stretch, bend, transverse moduli
-    stretch_mod = 1
-    bend_mod = 0.0
-    tran_mod = 0
+    stretch_mod: float = 1
+    bend_mod: float = 0.0
+    tran_mod: float = 0
 
-    # --- Lattice Shearing ---
-    # Shear strain (gamma). Each node is sheared by equation: delta_x = hor_shear * (height-lattice_height/2)
-    hor_shear = 0.001
+    # --- Lattice Strain ---
+    # Magnitude of the strain
+    gamma: float = 0.001
+    stretch_x, stretch_y, shear, dilate = get_transformation_matrices(gamma=gamma)
+    transformations = [stretch_x]
 
     # ----- Energy Minimization -----
     # Method to minimize the energy
@@ -67,25 +58,10 @@ class Parameters:
     # Minimization Tolerances: see minimization methods. For linear systems this is usually norm(residual) <= tolerance
     tolerance = 1e-8
 
-    # ----- Lattice pickling -----
-    # All the parameters for handling pickling and visualization output
-    pickle_handler_parameters = PickleHandlerParameters(
-        create_lattice_pickle=False,
-        create_final_pos_pickle=False,
-        create_init_pdf=False,
-        create_sheared_pdf=False,
-        create_final_pdf=False,
-        save_lattice_pickle_file="lattice_pickle.p",
-        final_pos_pickle_file="final_pos.p",
-        init_pos_pdf_file="init_pos.pdf",
-        sheared_pos_pdf_file="sheared_pos.pdf",
-        final_pos_pdf_file="final_pos.pdf"
-    )
-
     # ----- Output Handling -----
     # (See OutputHandlerParameters for more details)
     today_date = datetime.now().strftime("%m-%d-%y-%H")
-    run_folder_name: str = f"{lattice_length}-{str(random_seed)[:7]}-{pc_strength}"
+    run_folder_name: str = f"{lattice_length}-{str(random_seed)}-{r_strength}"
 
     output_handler_parameters = OutputHandlerParameters(
         inc_p=True,
@@ -107,5 +83,18 @@ class Parameters:
         draw_pbc=False,
         node_color="black",
         bond_color="black",
-        hor_shear=hor_shear
+        hor_shear=gamma
     )
+
+    # ----- Saving Visualization Files -----
+    pickle_handler_parameters = VisualizationHandlerParameters(
+        create_init_pdf=False,
+        create_sheared_pdf=False,
+        create_final_pdf=False,
+        save_lattice_pickle_file="lattice_pickle.p",
+        final_pos_pickle_file="final_pos.p",
+        init_pos_pdf_file="init_pos.pdf",
+        sheared_pos_pdf_file="sheared_pos.pdf",
+        final_pos_pdf_file="final_pos.pdf"
+    )
+

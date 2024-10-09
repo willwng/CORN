@@ -9,15 +9,17 @@ from scipy.sparse import csr_matrix
 from energyminimization.energies.bend import get_bend_hessian
 from energyminimization.energies.stretch import get_stretch_hessian
 from energyminimization.energies.transverse import get_transverse_hessian
+from energyminimization.transformations import transform_pos_matrix
 from lattice.abstract_lattice import AbstractLattice
 
+# Caching results when fetching the position matrix for a lattice
 lattice_to_pos: Dict[AbstractLattice, np.ndarray] = {}
 
 
 def create_pos_matrix(lattice: AbstractLattice) -> np.ndarray:
     """
     Used to create a shape (n, 2) matrix (n is number of nodes) used to denote
-        (x,y) position of each node
+        (x,y) position of the *rest position* each node
     Example:
     [[0, 5],
      [2,5]]
@@ -42,96 +44,6 @@ def create_pos_matrix(lattice: AbstractLattice) -> np.ndarray:
     # Store matrix
     lattice_to_pos[lattice] = pos_matrix
     return pos_matrix
-
-
-def get_transformation_matrices(gamma: float) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """
-    Returns the stretch x, stretch y, shear, dilate transformation matrices
-    """
-    stretch_x = np.array([[1 + gamma, 0], [0, 1]])
-    stretch_y = np.array([[1, 0], [0, 1 + gamma]])
-    shear = np.array([[1, gamma], [gamma, 1]])
-    dilate = np.array([[1 + gamma, 0], [0, 1 + gamma]])
-    return stretch_x, stretch_y, shear, dilate
-
-
-def transform_pos_matrix(pos_matrix: np.ndarray, transformation_matrix: np.ndarray) -> np.ndarray:
-    """
-    Returns the transformed position matrix
-    """
-    pos_matrix = pos_matrix.reshape((-1, 2))
-    return (transformation_matrix @ pos_matrix.T).T
-
-
-def shear_pos_matrix(
-        lattice: AbstractLattice,
-        pos_matrix: np.ndarray,
-        hor: float,
-        comp: float,
-        shear: bool,
-) -> np.ndarray:
-    """
-    shear_pos_matrix returns the position matrix after lattice has been
-        compressed and sheared (based on parallelogram)
-    Note: does not mutate the lattice object
-
-    :param lattice: lattice object
-    :type lattice: Object that inherits AbstractLattice
-    :param pos_matrix: Matrix denoting initial positions of each node
-    :type pos_matrix: Shape (n, 2)
-    :param hor: Percent shear strain
-    :type hor: float
-    :param comp: Percent of maximum height that the lattice should be
-        compressed to
-    :type comp: float
-    :param shear: Whether to shear or stretch the lattice
-    :return: A new (n, 2) matrix denoting positions of nodes after shearing
-    """
-    nodes = lattice.get_nodes()
-    sheared_pos_matrix = pos_matrix.copy()
-    half_height = max(node.y for node in nodes) / 2
-    min_x = min(node.get_xy()[0] for node in nodes)
-    for node in nodes:
-        n_pos = node.get_xy()
-        n_id = node.get_id()
-        if shear:
-            sheared_pos_matrix[n_id][0] += hor * (n_pos[1] - half_height)
-        else:
-            sheared_pos_matrix[n_id][0] += hor * (sheared_pos_matrix[n_id][0] - min_x)
-        sheared_pos_matrix[n_id][1] += comp * (sheared_pos_matrix[n_id][1])
-    return sheared_pos_matrix
-
-
-def verify_r_matrix(
-        pos_vector: np.ndarray,
-        r_matrix: np.ndarray,
-        lattice: AbstractLattice,
-        active_bond_indices: np.ndarray,
-        is_generic: bool = False
-) -> None:
-    """
-    Verifies that the r_matrix is correct
-    """
-    pos_matrix = pos_vector.reshape((-1, 2))
-    for i, j, hor, top, idx in active_bond_indices:
-        i_pos = pos_matrix[i]
-        j_pos = pos_matrix[j]
-        r_ij = j_pos - i_pos
-        if hor:
-            assert i_pos[0] > j_pos[0]
-            i_pos = i_pos - np.array([lattice.get_length(), 0])
-            r_ij = j_pos - i_pos
-        if top:
-            assert i_pos[1] > j_pos[1]
-            assert i_pos[1] == lattice.get_height()
-            i_pos = i_pos - np.array([0, lattice.get_height() + lattice.height_increment])
-            r_ij = j_pos - i_pos
-
-        assert np.allclose(r_ij, r_matrix[idx])
-        if not is_generic:
-            assert np.allclose(np.linalg.norm(r_ij), 1)
-
-    return
 
 
 def create_r_matrix(
@@ -177,6 +89,38 @@ def create_r_matrix(
         r_matrix = r_matrix / norm_factor
 
     return r_matrix
+
+
+def verify_r_matrix(
+        pos_vector: np.ndarray,
+        r_matrix: np.ndarray,
+        lattice: AbstractLattice,
+        active_bond_indices: np.ndarray,
+        is_generic: bool = False
+) -> None:
+    """
+    Verifies that the r_matrix is correct
+    """
+    pos_matrix = pos_vector.reshape((-1, 2))
+    for i, j, hor, top, idx in active_bond_indices:
+        i_pos = pos_matrix[i]
+        j_pos = pos_matrix[j]
+        r_ij = j_pos - i_pos
+        if hor:
+            assert i_pos[0] > j_pos[0]
+            i_pos = i_pos - np.array([lattice.get_length(), 0])
+            r_ij = j_pos - i_pos
+        if top:
+            assert i_pos[1] > j_pos[1]
+            assert i_pos[1] == lattice.get_height()
+            i_pos = i_pos - np.array([0, lattice.get_height() + lattice.height_increment])
+            r_ij = j_pos - i_pos
+
+        assert np.allclose(r_ij, r_matrix[idx])
+        if not is_generic:
+            assert np.allclose(np.linalg.norm(r_ij), 1)
+
+    return
 
 
 def create_correction_matrix(lattice: AbstractLattice, init_pos: np.ndarray,
@@ -260,18 +204,6 @@ class KMatrixResult:
         self.k_transverse = project(self.k_transverse)
         valid_matrices = filter(lambda x: x is not None, [self.k_stretch, self.k_bend, self.k_transverse])
         self.k_total = sum(valid_matrices)
-
-
-# def add_k_matrices(k1: KMatrixResult, k2: KMatrixResult) -> KMatrixResult:
-#     def add_opt_matrix(m1: Optional[csr_matrix], m2: Optional[csr_matrix]) -> Optional[csr_matrix]:
-#         if m1 is None:
-#             return m2
-#         elif m2 is None:
-#             return m1
-#         else:
-#             return m1 + m2
-#     return KMatrixResult(add_opt_matrix(k1.k_stretch, k2.k_stretch), add_opt_matrix(k1.k_bend, k2.k_bend),
-#                          add_opt_matrix(k1.k_transverse, k2.k_transverse))
 
 
 def get_k_matrices(

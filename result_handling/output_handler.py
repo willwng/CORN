@@ -12,7 +12,7 @@ import numpy as np
 from energyminimization.minimize import MinimizationResult
 from lattice.abstract_lattice import AbstractLattice
 from result_handling.result_helper import create_folder_if_not_exist, create_lattice_object_pickle
-from result_handling.pickle_handler import PickleHandler
+from result_handling.pickle_handler import VisualizationHandler
 
 
 class OutputHandlerParameters:
@@ -69,9 +69,9 @@ class OutputRow:
 class OutputHandler:
     output_file: str
     params: OutputHandlerParameters
-    pickle_handler: PickleHandler
+    pickle_handler: VisualizationHandler
 
-    def __init__(self, params: OutputHandlerParameters, parameter_path: str, pickle_handler: PickleHandler):
+    def __init__(self, params: OutputHandlerParameters, parameter_path: str, pickle_handler: VisualizationHandler):
         """
         Initialize the output handler
         :output_file: The name of the results file to be created

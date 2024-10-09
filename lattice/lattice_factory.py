@@ -7,23 +7,25 @@ import pickle
 
 from lattice.abstract_lattice import AbstractLattice
 from lattice.kagome_lattice import KagomeLattice
+from lattice.lattice_type import LatticeType
 from lattice.square_lattice import SquareLattice
 from lattice.triangular_lattice import TriangularLattice
+
 
 
 class LatticeFactory:
     @staticmethod
     def create_lattice(
-            lattice_type: int, length: int, height: float, generate_pi_bonds: bool
+            lattice_type: LatticeType, length: int, height: float, generate_pi_bonds: bool
     ) -> AbstractLattice:
         """
         Create a fresh lattice from scratch
         """
-        if lattice_type == 1:
+        if lattice_type == LatticeType.KAGOME:
             return KagomeLattice(length=length, height=height)
-        elif lattice_type == 2:
+        elif lattice_type == LatticeType.TRIANGULAR:
             return TriangularLattice(length=length, height=height, generate_pi_bonds=generate_pi_bonds)
-        elif lattice_type == 3:
+        elif lattice_type == LatticeType.SQUARE:
             return SquareLattice(length=length, height=height)
         else:
             print(f"Invalid type of lattice: {lattice_type}")

@@ -4,7 +4,6 @@ visualize_lattice.py allows visualizations of the position of the lattice
 
 import matplotlib.pyplot as plt
 import numpy as np
-import seaborn as sns
 
 
 class VisualizerParameters:
@@ -70,8 +69,6 @@ class Visualizer:
         if rigid_edges is None:
             rigid_edges = []
         plt.clf()
-        sns.set()
-        sns.set_style(style="white")  # remove background
         plt.axis("scaled")
         plot_bounds = self.create_plot_bounds(lattice)
         plt.xlim(plot_bounds[0], plot_bounds[1])
