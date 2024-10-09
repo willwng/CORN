@@ -7,11 +7,9 @@ Visit the [CORN Wiki](https://github.com/willwng/CORN/wiki)! This code generates
 ## Required Libraries
 See [requirements.txt](requirements.txt)
 
-These can be installed with `pip install -r requirements.txt`
+These can be installed with `pip install -r requirements.txt.`
 
-(It is not important to get these version numbers - the latest versions of 
-each library should work fine. However, early versions of `scipy` may not have
-the newest solvers/mimization methods)
+An older, but optimized version of the code can be found in the `optimized` branch, but this requires significantly more libraries
 
 ## Running CORN
 
