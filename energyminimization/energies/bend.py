@@ -35,64 +35,65 @@ def get_bend_hessian(
     # The number of entries be equal to num_bonds * 36
     #   (since for each bond, there are 6 (3*2) node dimensions)
     # 6 (second order derivatives) and 30 (15*2 second partial derivatives)
-
     j, i, k = active_pi_indices[:, 0], active_pi_indices[:, 1], active_pi_indices[:, 2]
-    idx, sign = active_pi_indices[:, 3], active_pi_indices[:, -1]
-    num_pi_bonds = np.max(idx) + 1
+    bond1_idx, pi_idx, sign = active_pi_indices[:, 3], active_pi_indices[:, 4], active_pi_indices[:, 5]
+    num_pi_bonds = np.max(pi_idx) + 1
     rows, cols = np.zeros(36 * num_pi_bonds, dtype=np.uint32), np.zeros(36 * num_pi_bonds, dtype=np.uint32)
     data = np.zeros(36 * num_pi_bonds, dtype=np.float64)
 
-    pi_bond_idx = 36 * idx
+    entry_idx = 36 * pi_idx
     x_i, x_j, x_k = 2 * i, 2 * j, 2 * k
     y_i, y_j, y_k = 2 * i + 1, 2 * j + 1, 2 * k + 1
-    if np.shape(sign) != np.shape(r_matrix[idx]):
+
+    # Get the index of bond 1
+    if np.shape(sign) != np.shape(r_matrix[bond1_idx]):
         sign = sign[:, np.newaxis]
-    r_ji = np.multiply(sign, r_matrix[idx])
+    r_ji = np.multiply(sign, r_matrix[bond1_idx])
     r_x, r_y = r_ji[:, 0], r_ji[:, 1]
     # Derivative df^2/d_x1^2 and df^2/d_y1^2
     dxx = bend_mod * np.square(r_y)
     dyy = bend_mod * np.square(r_x)
     dxy = bend_mod * r_x * r_y
-    add_entry(rows, cols, data, pi_bond_idx, x_j, x_j, 4 * dxx)
-    add_entry(rows, cols, data, pi_bond_idx + 1, y_j, y_j, 4 * dyy)
-    add_entry(rows, cols, data, pi_bond_idx + 2, x_i, x_i, dxx)
-    add_entry(rows, cols, data, pi_bond_idx + 3, y_i, y_i, dyy)
-    add_entry(rows, cols, data, pi_bond_idx + 4, x_k, x_k, dxx)
-    add_entry(rows, cols, data, pi_bond_idx + 5, y_k, y_k, dyy)
+    add_entry(rows, cols, data, entry_idx, x_j, x_j, 4 * dxx)
+    add_entry(rows, cols, data, entry_idx + 1, y_j, y_j, 4 * dyy)
+    add_entry(rows, cols, data, entry_idx + 2, x_i, x_i, dxx)
+    add_entry(rows, cols, data, entry_idx + 3, y_i, y_i, dyy)
+    add_entry(rows, cols, data, entry_idx + 4, x_k, x_k, dxx)
+    add_entry(rows, cols, data, entry_idx + 5, y_k, y_k, dyy)
     # Derivative df^2/d_(x1,y1)
-    add_entry(rows, cols, data, pi_bond_idx + 6, x_j, y_j, -4 * dxy)
-    add_entry(rows, cols, data, pi_bond_idx + 7, y_j, x_j, -4 * dxy)
-    add_entry(rows, cols, data, pi_bond_idx + 8, x_i, y_i, -dxy)
-    add_entry(rows, cols, data, pi_bond_idx + 9, y_i, x_i, -dxy)
-    add_entry(rows, cols, data, pi_bond_idx + 10, x_k, y_k, -dxy)
-    add_entry(rows, cols, data, pi_bond_idx + 11, y_k, x_k, -dxy)
+    add_entry(rows, cols, data, entry_idx + 6, x_j, y_j, -4 * dxy)
+    add_entry(rows, cols, data, entry_idx + 7, y_j, x_j, -4 * dxy)
+    add_entry(rows, cols, data, entry_idx + 8, x_i, y_i, -dxy)
+    add_entry(rows, cols, data, entry_idx + 9, y_i, x_i, -dxy)
+    add_entry(rows, cols, data, entry_idx + 10, x_k, y_k, -dxy)
+    add_entry(rows, cols, data, entry_idx + 11, y_k, x_k, -dxy)
     # Derivative df^2/d_(x1,x2or3)
-    add_entry(rows, cols, data, pi_bond_idx + 12, x_j, x_i, -2 * dxx)
-    add_entry(rows, cols, data, pi_bond_idx + 13, x_i, x_j, -2 * dxx)
-    add_entry(rows, cols, data, pi_bond_idx + 14, x_j, x_k, -2 * dxx)
-    add_entry(rows, cols, data, pi_bond_idx + 15, x_k, x_j, -2 * dxx)
-    add_entry(rows, cols, data, pi_bond_idx + 16, x_i, x_k, dxx)
-    add_entry(rows, cols, data, pi_bond_idx + 17, x_k, x_i, dxx)
+    add_entry(rows, cols, data, entry_idx + 12, x_j, x_i, -2 * dxx)
+    add_entry(rows, cols, data, entry_idx + 13, x_i, x_j, -2 * dxx)
+    add_entry(rows, cols, data, entry_idx + 14, x_j, x_k, -2 * dxx)
+    add_entry(rows, cols, data, entry_idx + 15, x_k, x_j, -2 * dxx)
+    add_entry(rows, cols, data, entry_idx + 16, x_i, x_k, dxx)
+    add_entry(rows, cols, data, entry_idx + 17, x_k, x_i, dxx)
     # Derivative df^2/d_(y1,y2or3)
-    add_entry(rows, cols, data, pi_bond_idx + 18, y_j, y_i, -2 * dyy)
-    add_entry(rows, cols, data, pi_bond_idx + 19, y_i, y_j, -2 * dyy)
-    add_entry(rows, cols, data, pi_bond_idx + 20, y_j, y_k, -2 * dyy)
-    add_entry(rows, cols, data, pi_bond_idx + 21, y_k, y_j, -2 * dyy)
-    add_entry(rows, cols, data, pi_bond_idx + 22, y_i, y_k, dyy)
-    add_entry(rows, cols, data, pi_bond_idx + 23, y_k, y_i, dyy)
+    add_entry(rows, cols, data, entry_idx + 18, y_j, y_i, -2 * dyy)
+    add_entry(rows, cols, data, entry_idx + 19, y_i, y_j, -2 * dyy)
+    add_entry(rows, cols, data, entry_idx + 20, y_j, y_k, -2 * dyy)
+    add_entry(rows, cols, data, entry_idx + 21, y_k, y_j, -2 * dyy)
+    add_entry(rows, cols, data, entry_idx + 22, y_i, y_k, dyy)
+    add_entry(rows, cols, data, entry_idx + 23, y_k, y_i, dyy)
     # Derivative df^2/d_(x1,y2or3)
-    add_entry(rows, cols, data, pi_bond_idx + 24, x_j, y_i, 2 * dxy)
-    add_entry(rows, cols, data, pi_bond_idx + 25, y_i, x_j, 2 * dxy)
-    add_entry(rows, cols, data, pi_bond_idx + 26, x_j, y_k, 2 * dxy)
-    add_entry(rows, cols, data, pi_bond_idx + 27, y_k, x_j, 2 * dxy)
-    add_entry(rows, cols, data, pi_bond_idx + 28, x_i, y_j, 2 * dxy)
-    add_entry(rows, cols, data, pi_bond_idx + 29, y_j, x_i, 2 * dxy)
-    add_entry(rows, cols, data, pi_bond_idx + 30, x_i, y_k, -dxy)
-    add_entry(rows, cols, data, pi_bond_idx + 31, y_k, x_i, -dxy)
-    add_entry(rows, cols, data, pi_bond_idx + 32, x_k, y_j, 2 * dxy)
-    add_entry(rows, cols, data, pi_bond_idx + 33, y_j, x_k, 2 * dxy)
-    add_entry(rows, cols, data, pi_bond_idx + 34, x_k, y_i, -dxy)
-    add_entry(rows, cols, data, pi_bond_idx + 35, y_i, x_k, -dxy)
+    add_entry(rows, cols, data, entry_idx + 24, x_j, y_i, 2 * dxy)
+    add_entry(rows, cols, data, entry_idx + 25, y_i, x_j, 2 * dxy)
+    add_entry(rows, cols, data, entry_idx + 26, x_j, y_k, 2 * dxy)
+    add_entry(rows, cols, data, entry_idx + 27, y_k, x_j, 2 * dxy)
+    add_entry(rows, cols, data, entry_idx + 28, x_i, y_j, 2 * dxy)
+    add_entry(rows, cols, data, entry_idx + 29, y_j, x_i, 2 * dxy)
+    add_entry(rows, cols, data, entry_idx + 30, x_i, y_k, -dxy)
+    add_entry(rows, cols, data, entry_idx + 31, y_k, x_i, -dxy)
+    add_entry(rows, cols, data, entry_idx + 32, x_k, y_j, 2 * dxy)
+    add_entry(rows, cols, data, entry_idx + 33, y_j, x_k, 2 * dxy)
+    add_entry(rows, cols, data, entry_idx + 34, x_k, y_i, -dxy)
+    add_entry(rows, cols, data, entry_idx + 35, y_i, x_k, -dxy)
 
     return csr_matrix((data, (rows, cols)), shape=(2 * n, 2 * n))
 

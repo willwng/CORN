@@ -96,7 +96,8 @@ class AbstractLattice:
         Removes a bond from the lattice
         """
         bond.set_inactive()
-        self.update_active_bonds()
+        self.active_bonds.remove(bond)
+        self.update_active_pi_bonds()
 
     def update_active_pi_bonds(self) -> None:
         """
@@ -105,6 +106,10 @@ class AbstractLattice:
         self.active_pi_bonds = [pi_bond for pi_bond in self.pi_bonds if pi_bond.exists()]
 
     def drop_bond(self, bond: Bond) -> None:
+        """
+        Used for *entirely removing* a bond from the lattice, not just setting inactive
+        Only for temporary or extraneous bonds
+        """
         bond.set_inactive()
         self.bonds.remove(bond)
         self.pi_bonds = [pi_bond for pi_bond in self.pi_bonds if

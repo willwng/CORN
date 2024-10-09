@@ -95,15 +95,20 @@ def setup_linear_system(params: SolveParameters):
     active_bond_indices_pbc = params.active_bond_indices[
         np.logical_or(params.active_bond_indices[:, 2] == 1, params.active_bond_indices[:, 3] == 1)]
 
+    active_pi_indices_in = params.active_pi_indices[
+        np.logical_and(params.active_pi_indices[:, 6] != 1, params.active_pi_indices[:, 7] != 1)]
+    active_pi_indices_pbc = params.active_pi_indices[
+        np.logical_or(params.active_pi_indices[:, 6] == 1, params.active_pi_indices[:, 7] == 1)]
+
     k_matrices_in = pos.get_k_matrices(n=n, r_matrix=params.r_matrix, stretch_mod=params.stretch_mod,
                                        bend_mod=params.bend_mod, tran_mod=params.tran_mod,
                                        active_bond_indices=active_bond_indices_in,
-                                       active_pi_indices=params.active_pi_indices)
+                                       active_pi_indices=active_pi_indices_in)
 
     k_matrices_pbc = pos.get_k_matrices(n=n, r_matrix=params.r_matrix, stretch_mod=params.stretch_mod,
                                         bend_mod=params.bend_mod, tran_mod=params.tran_mod,
                                         active_bond_indices=active_bond_indices_pbc,
-                                        active_pi_indices=params.active_pi_indices)
+                                        active_pi_indices=active_pi_indices_pbc)
 
     return k_matrices_in, k_matrices_pbc, k_matrices_in.k_total, k_matrices_pbc.k_total
 

@@ -21,8 +21,8 @@ class Parameters:
 
     # ----- Lattice Properties -----
     lattice_type: LatticeType = LatticeType.TRIANGULAR
-    lattice_length: int = 15
-    lattice_height: float = 15
+    lattice_length: int = 30
+    lattice_height: float = 31
 
     # Generic networks have slight displacements in node positions
     is_generic: bool = False
@@ -42,8 +42,8 @@ class Parameters:
 
     # ----- Mechanical Properties -----
     # alpha, kappa, mu: stretch, bend, transverse moduli
-    stretch_mod: float = 1
-    bend_mod: float = 0.0
+    stretch_mod: float = 1.0
+    bend_mod: float = 0.01
     tran_mod: float = 0.0
 
     # --- Lattice Strain ---
@@ -53,7 +53,7 @@ class Parameters:
 
     # ----- Energy and Minimization -----
     # Method to minimize the energy
-    minimization_method: MinimizationType = MinimizationType.NONLINEAR
+    minimization_method: MinimizationType = MinimizationType.LINEAR
     # Minimization Tolerances: see minimization methods. For linear systems this is usually norm(residual) <= tolerance
     tolerance = 1e-8
 

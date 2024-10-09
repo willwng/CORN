@@ -9,7 +9,7 @@ from scipy.sparse import csr_matrix
 from energyminimization.energies.bend import get_bend_hessian
 from energyminimization.energies.stretch_linear import get_stretch_hessian
 from energyminimization.energies.transverse import get_transverse_hessian
-from energyminimization.transformations import transform_pos_matrix, Strain
+from energyminimization.transformations import Strain
 from lattice.abstract_lattice import AbstractLattice
 
 # Caching results when fetching the position matrix for a lattice

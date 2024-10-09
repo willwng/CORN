@@ -24,9 +24,8 @@ def get_stretch_hessian(
     :param stretch_mod: alpha - stretching modulus
     :type stretch_mod: float
     :param r_matrix: matrix containing unit vectors between each node.
-        Example: r_matrix[i][j] returns the
-    unit vector [r_x, r_y] between nodes i and j
-    :type r_matrix: Shape (n, n, 2) matrix
+        Example: r_matrix[idx] returns the unit vector [r_x, r_y] for bond with index [idx]
+    :type r_matrix: Shape (n_bonds, 2) matrix
     :param active_bond_indices: List containing indices of [i, j]
     :type active_bond_indices: Shape (# bonds, 2) matrix
     :return: Hessian matrix size (n, n)
