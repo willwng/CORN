@@ -2,7 +2,7 @@
 minimize.py is used to get and minimize the energy of a lattice
 """
 import time
-from typing import List
+from typing import List, Optional
 
 import numpy as np
 
@@ -47,7 +47,7 @@ def minimize(
         tran_mod: float,
         strain: Strain,
         sheared_pos: np.ndarray,
-        init_guess: np.ndarray,
+        init_guess: Optional[np.ndarray],
         reusable_results: solver.ReusableResults,
         tolerance: float,
         minimization_method: solver.MinimizationType,

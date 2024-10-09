@@ -12,7 +12,7 @@ from lattice.abstract_lattice import AbstractLattice
 from lattice.bond import Bond
 
 
-def assign_bond_levels(lattice: AbstractLattice, rng: Generator):
+def assign_bond_seeds(lattice: AbstractLattice, rng: Generator):
     """ Sets the bond levels (s_i):  the value for when p > s_i, the bond i is added to the lattice """
     # Sort the bonds so we can get reproducible results
     sorted_bonds = sorted(lattice.get_bonds(), key=lambda b: b.get_node1().get_id())
@@ -25,14 +25,14 @@ def set_bonds_basin(lattice: AbstractLattice, p: float, r: float, target_directi
     """ Sets the bonds given p and r """
     # First set all bonds to active
     for bond in lattice.get_bonds():
-        bond.add_bond()
+        bond.set_active()
 
     # Compute how many bonds we need to remove
     num_remove = int((1 - p) * len(lattice.get_bonds()))
     removal_order = get_removal_order(lattice, r, target_direction)
     for _ in range(num_remove):
         bond = removal_order.popleft()
-        bond.remove_bond()
+        bond.set_inactive()
     lattice.update_active_bonds()
     return
 

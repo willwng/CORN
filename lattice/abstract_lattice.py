@@ -27,7 +27,7 @@ class AbstractLattice:
     pi_bonds: List[PiBond] = []
 
     # Contains all instances of only existing bonds and boundary bonds (faster lookup)
-    active_bonds: List[Bond] = []
+    active_bonds: set[Bond] = set()
     boundary_bonds: List[Bond] = []
     active_pi_bonds: List[PiBond] = []
 
@@ -56,7 +56,7 @@ class AbstractLattice:
     def get_bonds(self) -> List[Bond]:
         return self.bonds
 
-    def get_active_bonds(self) -> List[Bond]:
+    def get_active_bonds(self) -> set[Bond]:
         return self.active_bonds
 
     def get_nodes(self) -> List[Node]:
@@ -88,8 +88,15 @@ class AbstractLattice:
         """
         Updates the array of active bonds
         """
-        self.active_bonds = [bond for bond in self.bonds if bond.exists()]
+        self.active_bonds = set([bond for bond in self.bonds if bond.exists()])
         self.update_active_pi_bonds()
+
+    def remove_bond(self, bond: Bond) -> None:
+        """
+        Removes a bond from the lattice
+        """
+        bond.set_inactive()
+        self.update_active_bonds()
 
     def update_active_pi_bonds(self) -> None:
         """
@@ -98,7 +105,7 @@ class AbstractLattice:
         self.active_pi_bonds = [pi_bond for pi_bond in self.pi_bonds if pi_bond.exists()]
 
     def drop_bond(self, bond: Bond) -> None:
-        bond.remove_bond()
+        bond.set_inactive()
         self.bonds.remove(bond)
         self.pi_bonds = [pi_bond for pi_bond in self.pi_bonds if
                          pi_bond.get_bond1() != bond and pi_bond.get_bond2() != bond]
@@ -201,7 +208,7 @@ class AbstractLattice:
         """
         # First set all bonds to inactive
         for bond in self.bonds:
-            bond.remove_bond()
+            bond.set_inactive()
 
         # The number of desired bonds to be added (total num bonds - num boundary bonds)
         desired_bonds = int(prob_fill * len(self.bonds))
@@ -210,7 +217,7 @@ class AbstractLattice:
         addable_bonds = [bond for bond in self.get_bonds()]
         shuffle(addable_bonds)
         for i in range(desired_bonds):
-            addable_bonds[i].add_bond()
+            addable_bonds[i].set_active()
 
         # Maintain class invariant
         self.update_active_bonds()
@@ -272,7 +279,7 @@ class AbstractLattice:
         Sets all bonds to active
         """
         for bond in self.bonds:
-            bond.add_bond()
+            bond.set_active()
         self.update_active_bonds()
         return
 
@@ -320,7 +327,7 @@ class AbstractLattice:
             if edge:
                 b.set_hor_pbc()
             if not exists:
-                b.remove_bond()
+                b.set_inactive()
         # Load the pi bonds by their incident bond ids and node ids
         for b1_id, b2_id, vertex, edge1, edge2 in pi_bond_data:
             b1 = self.bonds[b1_id]

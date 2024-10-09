@@ -10,6 +10,7 @@ from typing import List
 import numpy as np
 
 from energyminimization.minimize import MinimizationResult
+from energyminimization.transformations import Strain
 from lattice.abstract_lattice import AbstractLattice
 from result_handling.result_helper import create_folder_if_not_exist, create_lattice_object_pickle
 from result_handling.pickle_handler import VisualizationHandler
@@ -33,11 +34,12 @@ class OutputHandlerParameters:
     # Whether to save these parameters within [folder_output]
     save_parameters = True
 
-    def __init__(self, inc_p: bool, inc_energies: bool, inc_ind_energies: bool, inc_non_affinity: bool,
-                 inc_bond_counts: bool, inc_backbone_count: bool, output_path: str, run_folder_name: str,
-                 output_file: str, save_parameters: bool):
+    def __init__(self, inc_p: bool, inc_energies: bool, strains: list[Strain], inc_ind_energies: bool,
+                 inc_non_affinity: bool, inc_bond_counts: bool, inc_backbone_count: bool, output_path: str,
+                 run_folder_name: str, output_file: str, save_parameters: bool):
         self.inc_p = inc_p
         self.inc_energies = inc_energies
+        self.strains = strains
         self.inc_ind_energies = inc_ind_energies
         self.inc_non_affinity = inc_non_affinity
         self.inc_bond_counts = inc_bond_counts
@@ -108,7 +110,7 @@ class OutputHandler:
         if self.params.inc_p:
             header.append("p")
         if self.params.inc_energies:
-            header.extend(["C_xxxx", "C_yyyy", "C_xyxy", "C_xxyy"])
+            header.extend([strain.name for strain in self.params.strains])
         if self.params.inc_ind_energies:
             header.extend(["stretch", "bend", "transverse"])
         if self.params.inc_non_affinity:
@@ -133,6 +135,8 @@ class OutputHandler:
         # Write the results to the csv file
         if self.params.inc_p:
             row.append(bond_occupation)
+        if self.params.inc_energies:
+            row.extend([result.final_energy for result in minimization_results])
         if self.params.inc_ind_energies:
             row.extend(shear_mod_result.individual_energies)
         if self.params.inc_non_affinity:

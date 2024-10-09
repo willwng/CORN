@@ -46,13 +46,13 @@ class Bond(object):
         self.direction = -1
         self.s_key = 0
 
-    def remove_bond(self) -> None:
+    def set_inactive(self) -> None:
         """
         Sets the existence of this bond to false, does not remove the object
         """
         self.present = False
 
-    def add_bond(self) -> None:
+    def set_active(self) -> None:
         """
         Sets the existence of this bond to true
         """

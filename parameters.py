@@ -7,7 +7,7 @@ from datetime import datetime
 import numpy as np
 
 from energyminimization.solvers.solver import MinimizationType
-from energyminimization.transformations import StretchX
+from energyminimization.transformations import StretchX, StretchY
 from lattice.lattice_type import LatticeType
 from result_handling.output_handler import OutputHandlerParameters
 from result_handling.pickle_handler import VisualizationHandlerParameters
@@ -49,7 +49,7 @@ class Parameters:
     # --- Lattice Strain ---
     # Magnitude of the strain
     gamma: float = 0.001
-    strains = [StretchX(gamma=gamma)]
+    strains = [StretchX(gamma=gamma), StretchY(gamma=gamma)]
 
     # ----- Energy and Minimization -----
     # Method to minimize the energy
@@ -62,6 +62,7 @@ class Parameters:
     today_date = datetime.now().strftime("%m-%d-%y-%H")
     run_folder_name: str = f"{lattice_length}-{str(random_seed)}-{r_strength}"
     output_handler_parameters = OutputHandlerParameters(
+        strains=strains,
         inc_p=True,
         inc_energies=True,
         inc_ind_energies=False,
