@@ -18,7 +18,7 @@ from result_handling.pickle_handler import VisualizationHandler
 class OutputHandlerParameters:
     """ Parameters to be fed into the output handler """
     inc_p: bool
-    inc_shear_modulus: bool
+    inc_energies: bool
     inc_ind_energies: bool
     inc_non_affinity: bool
     inc_bond_counts: bool
@@ -33,12 +33,11 @@ class OutputHandlerParameters:
     # Whether to save these parameters within [folder_output]
     save_parameters = True
 
-    def __init__(self, inc_p: bool, inc_shear_modulus: bool, inc_ind_energies: bool, inc_non_affinity: bool,
+    def __init__(self, inc_p: bool, inc_energies: bool, inc_ind_energies: bool, inc_non_affinity: bool,
                  inc_bond_counts: bool, inc_backbone_count: bool, output_path: str, run_folder_name: str,
-                 output_file: str,
-                 save_parameters: bool):
+                 output_file: str, save_parameters: bool):
         self.inc_p = inc_p
-        self.inc_shear_modulus = inc_shear_modulus
+        self.inc_energies = inc_energies
         self.inc_ind_energies = inc_ind_energies
         self.inc_non_affinity = inc_non_affinity
         self.inc_bond_counts = inc_bond_counts
@@ -69,9 +68,10 @@ class OutputRow:
 class OutputHandler:
     output_file: str
     params: OutputHandlerParameters
-    pickle_handler: VisualizationHandler
+    visualization_handler: VisualizationHandler
 
-    def __init__(self, params: OutputHandlerParameters, parameter_path: str, pickle_handler: VisualizationHandler):
+    def __init__(self, params: OutputHandlerParameters, parameter_path: str,
+                 visualization_handler: VisualizationHandler):
         """
         Initialize the output handler
         :output_file: The name of the results file to be created
@@ -88,7 +88,7 @@ class OutputHandler:
 
         self.output_file = os.path.join(run_folder_path, params.output_file)
         self.params = params
-        self.pickle_handler = pickle_handler
+        self.visualization_handler = visualization_handler
         self._initialize_header()
 
     def get_run_folder(self) -> str:
@@ -107,7 +107,7 @@ class OutputHandler:
         header = OutputRow()
         if self.params.inc_p:
             header.append("p")
-        if self.params.inc_shear_modulus:
+        if self.params.inc_energies:
             header.extend(["C_xxxx", "C_yyyy", "C_xyxy", "C_xxyy"])
         if self.params.inc_ind_energies:
             header.extend(["stretch", "bend", "transverse"])
@@ -124,7 +124,6 @@ class OutputHandler:
             self,
             lattice: AbstractLattice,
             bond_occupation: float,
-            moduli: List[float],
             minimization_results: List[MinimizationResult],
     ):
         """ Add the results of the minimization to the output file (typically one row) """
@@ -134,8 +133,6 @@ class OutputHandler:
         # Write the results to the csv file
         if self.params.inc_p:
             row.append(bond_occupation)
-        if self.params.inc_shear_modulus:
-            row.extend(moduli)
         if self.params.inc_ind_energies:
             row.extend(shear_mod_result.individual_energies)
         if self.params.inc_non_affinity:
@@ -157,8 +154,8 @@ class OutputHandler:
                                      final_pos: np.ndarray):
         """ Create pickle files for the lattice and minimization result """
         pickle_out_path = os.path.join(self.get_run_folder(), folder_name)
-        self.pickle_handler.create_pickle_visualizations(folder=pickle_out_path, lattice=lattice,
-                                                         sheared_pos=sheared_pos, final_pos=final_pos)
+        self.visualization_handler.create_pickle_visualizations(folder=pickle_out_path, lattice=lattice,
+                                                                sheared_pos=sheared_pos, final_pos=final_pos)
         return
 
     def create_initial_lattice_object_pickle(self, lattice: AbstractLattice, file_name: str):

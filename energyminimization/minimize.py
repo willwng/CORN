@@ -10,6 +10,7 @@ import energyminimization.matrix_helper as pos
 import energyminimization.solvers.solver as solver
 from energyminimization.post_minimization.backbone import BackboneResult, get_backbone_result
 from energyminimization.post_minimization.non_affinity import get_non_affinity, NonAffinityResult
+from energyminimization.transformations import Strain
 from lattice.abstract_lattice import AbstractLattice
 
 
@@ -25,15 +26,15 @@ class MinimizationResult:
     time_used: float
     info: str
 
-    def __init__(self, init_energy, final_energy, sheared_pos, final_pos, individual_energies, non_affinity_result,
-                 backbone_result, reusable_results, time_used, info):
+    def __init__(self, init_energy, final_energy, sheared_pos, final_pos, individual_energies, reusable_results,
+                 time_used, info):
         self.init_energy = init_energy
         self.final_energy = final_energy
         self.sheared_pos = sheared_pos
         self.final_pos = final_pos
         self.individual_energies = individual_energies
-        self.non_affinity_result = non_affinity_result
-        self.backbone_result = backbone_result
+        # self.non_affinity_result = non_affinity_result
+        # self.backbone_result = backbone_result
         self.reusable_results = reusable_results
         self.time_used = time_used
         self.info = info
@@ -44,8 +45,7 @@ def minimize(
         stretch_mod: float,
         bend_mod: float,
         tran_mod: float,
-        shear_strain: float,
-        trans_matrix: np.ndarray,
+        strain: Strain,
         sheared_pos: np.ndarray,
         init_guess: np.ndarray,
         reusable_results: solver.ReusableResults,
@@ -65,11 +65,10 @@ def minimize(
     :type bend_mod: float
     :param tran_mod: modulus of transverse (mu)
     :type tran_mod: float
-    :param trans_matrix: transformation matrix
+    :param strain: strain applied to the lattice
     :param sheared_pos: position matrix containing the positions of each node
         after shearing
     :type sheared_pos: Matrix containing 2n elements (x, y for each node)
-    :param shear_strain: gamma/shear strain (used for non-affinity calculations)
     :param init_guess: initial position guess
     :param reusable_results: objects from previous minimization
     :param tolerance: norm(residual) <= max(tol*norm(b), atol)
@@ -112,7 +111,7 @@ def minimize(
     # Initial position of nodes, initial unit vectors for bonds, initial energy
     init_pos = pos.create_pos_matrix(lattice)
     correction_matrix = pos.create_correction_matrix(lattice=lattice, init_pos=init_pos,
-                                                     trans_matrix=trans_matrix, all_bond_indices=all_bond_indices)
+                                                     strain=strain, all_bond_indices=all_bond_indices)
     r_matrix = pos.create_r_matrix(pos_vector=init_pos, active_bond_indices=active_bond_indices, lattice=lattice,
                                    normalize=True)
     length_matrix = pos.create_r_matrix(pos_vector=init_pos, active_bond_indices=active_bond_indices, lattice=lattice,
@@ -130,21 +129,19 @@ def minimize(
     final_pos, individual_energies, info = solve_result.final_pos, solve_result.individual_energies, solve_result.info
     init_energy, final_energy = solve_result.init_energy, solve_result.final_energy
 
-    # Non-affinity parameter
-    non_affinity_result = get_non_affinity(lattice=lattice, final_pos=final_pos, shear_strain=shear_strain)
-
-    # Backbone result
-    backbone_result = get_backbone_result(lattice=lattice, stretch_mod=stretch_mod, final_pos=final_pos,
-                                          r_matrix=r_matrix, active_bond_indices=active_bond_indices,
-                                          tolerance=tolerance)
+    # # Non-affinity parameter
+    # non_affinity_result = get_non_affinity(lattice=lattice, final_pos=final_pos, shear_strain=shear_strain)
+    #
+    # # Backbone result
+    # backbone_result = get_backbone_result(lattice=lattice, stretch_mod=stretch_mod, final_pos=final_pos,
+    #                                       r_matrix=r_matrix, active_bond_indices=active_bond_indices,
+    #                                       tolerance=tolerance)
 
     return MinimizationResult(init_energy=init_energy,
                               final_energy=final_energy,
                               sheared_pos=sheared_pos,
                               final_pos=final_pos,
                               individual_energies=individual_energies,
-                              non_affinity_result=non_affinity_result,
-                              backbone_result=backbone_result,
                               reusable_results=solve_result.reusable_results,
                               time_used=time.time() - start_time,
                               info=f"Converged with code: {info}")

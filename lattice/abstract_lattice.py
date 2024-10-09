@@ -387,7 +387,7 @@ class AbstractLattice:
     def brute_generate_pi_bonds(self) -> None:
         """
         Generates the pi bonds in the lattice
-        (series of two colinear bonds with a node vertex)
+        (series of two co-linear bonds with a node vertex)
         """
         self.pi_bonds = []
         # Loop through the bonds to find common vertices (node with two bonds)

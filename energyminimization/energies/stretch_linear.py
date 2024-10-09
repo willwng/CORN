@@ -1,5 +1,5 @@
 """
-stretch.py is used to calculate the energy stored in a spring network from central forces
+stretch_linear.py is used to calculate the energy stored in a spring network from central forces
 """
 
 import numpy as np

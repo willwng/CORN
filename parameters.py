@@ -7,7 +7,7 @@ from datetime import datetime
 import numpy as np
 
 from energyminimization.solvers.solver import MinimizationType
-from energyminimization.transformations import get_transformation_matrices
+from energyminimization.transformations import StretchX
 from lattice.lattice_type import LatticeType
 from result_handling.output_handler import OutputHandlerParameters
 from result_handling.pickle_handler import VisualizationHandlerParameters
@@ -44,17 +44,16 @@ class Parameters:
     # alpha, kappa, mu: stretch, bend, transverse moduli
     stretch_mod: float = 1
     bend_mod: float = 0.0
-    tran_mod: float = 0
+    tran_mod: float = 0.0
 
     # --- Lattice Strain ---
     # Magnitude of the strain
     gamma: float = 0.001
-    stretch_x, stretch_y, shear, dilate = get_transformation_matrices(gamma=gamma)
-    transformations = [stretch_x]
+    strains = [StretchX(gamma=gamma)]
 
-    # ----- Energy Minimization -----
+    # ----- Energy and Minimization -----
     # Method to minimize the energy
-    minimization_method: MinimizationType = MinimizationType.LINEAR
+    minimization_method: MinimizationType = MinimizationType.NONLINEAR
     # Minimization Tolerances: see minimization methods. For linear systems this is usually norm(residual) <= tolerance
     tolerance = 1e-8
 
@@ -62,10 +61,9 @@ class Parameters:
     # (See OutputHandlerParameters for more details)
     today_date = datetime.now().strftime("%m-%d-%y-%H")
     run_folder_name: str = f"{lattice_length}-{str(random_seed)}-{r_strength}"
-
     output_handler_parameters = OutputHandlerParameters(
         inc_p=True,
-        inc_shear_modulus=True,
+        inc_energies=True,
         inc_ind_energies=False,
         inc_non_affinity=False,
         inc_bond_counts=False,
@@ -97,4 +95,3 @@ class Parameters:
         sheared_pos_pdf_file="sheared_pos.pdf",
         final_pos_pdf_file="final_pos.pdf"
     )
-

@@ -1,5 +1,9 @@
 """
 Central forces with non-linear effects (uses full form of 1/2k(l-l0)^2)
+This file contains key functions: computing energy, gradient (Jacobian), and Hessian
+
+The key insight is that the vector pointing from node j to i (in the current position)
+    is given by c_ij = r_ij - u_i + u_j (where r_ij is from the original/rest position)
 """
 from typing import Tuple
 
@@ -27,9 +31,11 @@ def compute_lengths(
     u_node_matrix = u_node_matrix.reshape(-1, 2)
     i, j, idx = active_bond_indices[:, 0], active_bond_indices[:, 1], active_bond_indices[:, -1]
 
-    # c_ij points from j to i based on their current positions, length_matrix is the length of c_ij, d is (l-l_0)
+    # c_ij points from j to i based on their current positions
     c_matrix = np.subtract(r_matrix[idx], np.subtract(u_node_matrix[i, :], u_node_matrix[j, :]))
+    # Length of each bond
     length_matrix = np.linalg.norm(c_matrix, axis=1)
+    # Difference between current length and rest length
     d_matrix = length_matrix - active_bond_lengths[idx]
     return c_matrix, length_matrix, d_matrix
 

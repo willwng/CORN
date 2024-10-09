@@ -5,8 +5,6 @@ To run the code:
     '(python executable) main.py'
 """
 import inspect
-import time
-from ast import Param
 from typing import Tuple, Optional, List
 
 import numpy as np
@@ -16,6 +14,7 @@ import energyminimization.minimize as em
 import lattice.bond_basin_helper as basin
 from energyminimization.minimize import MinimizationResult
 from energyminimization.solvers.solver import ReusableResults
+from energyminimization.transformations import Strain
 from lattice.abstract_lattice import AbstractLattice
 from lattice.generic_lattice import make_generic
 from lattice.lattice_factory import LatticeFactory
@@ -26,9 +25,8 @@ from visualization.visualize_lattice import Visualizer
 
 def run_minimization(
         lattice: AbstractLattice,
-        shear_strain: float,
         sheared_pos: np.ndarray,
-        trans_matrix: np.ndarray,
+        strain: Strain,
         init_guess: Optional[np.ndarray],
         reusable_results: Optional[ReusableResults],
 ) -> MinimizationResult:
@@ -37,9 +35,8 @@ def run_minimization(
     used, final energy per shear, and final minimization result
 
     :param lattice: the lattice object
-    :param shear_strain: amount of shear to apply to the lattice
     :param sheared_pos: sheared position of the lattice
-    :param trans_matrix: transformation matrix
+    :param strain: the strain applied to the lattice
     :param init_guess: initial position guess for the energy minimization
     :param reusable_results: reusable results from the previous minimization
     """
@@ -49,9 +46,8 @@ def run_minimization(
         stretch_mod=Parameters.stretch_mod,
         bend_mod=Parameters.bend_mod,
         tran_mod=Parameters.tran_mod,
-        shear_strain=shear_strain,
         sheared_pos=sheared_pos,
-        trans_matrix=trans_matrix,
+        strain=strain,
         init_guess=init_guess,
         tolerance=Parameters.tolerance,
         minimization_method=Parameters.minimization_method,
@@ -67,35 +63,33 @@ def run_minimization(
     return minimization_result
 
 
-def set_lattice_bonds(lattice: AbstractLattice, p_fill: float):
-    """
-    Sets the lattice bond fill probability
-
-    :param lattice: the lattice object
-    :param p_fill: desired bond occupation probability (0 <= p_fill <= 1)
-    """
-    lattice.set_bonds(prob_fill=p_fill)
-    return
-
-
-def initialize_lattice(set_bonds_active: bool):
-    """
-    Initializes the lattice object (either by loading a pickle file or creating a new lattice)
-    """
+def initialize_lattice(rng: np.random.Generator) -> AbstractLattice:
     lattice = LatticeFactory.create_lattice(
         lattice_type=Parameters.lattice_type,
         length=Parameters.lattice_length,
         height=Parameters.lattice_height,
-        # Naive optimization: only set bonds active if bending is relevant
-        generate_pi_bonds=Parameters.bend_mod != 0,
+        generate_pi_bonds=Parameters.bend_mod != 0,  # Naive optimization: only make pi bonds if bending is relevant
     )
 
+    # --- Initialization steps ---
     # Pre-compute bond directions
     [bond.get_direction() for bond in lattice.get_bonds()]
 
     # Make the lattice generic if specified
     if Parameters.is_generic:
-        make_generic(lattice=lattice, rng=get_rng(), d_shift=Parameters.d_shift)
+        make_generic(lattice=lattice, rng=rng, d_shift=Parameters.d_shift)
+
+    # Slight hacky-fix. Remove bonds with double "imaginary positions" (i.e. bonds that are both periodic in x and y)
+    imag_x = set([bond.get_node1() for bond in lattice.bonds if bond.is_hor_pbc()])
+    imag_y = set([bond.get_node1() for bond in lattice.bonds if bond.is_top_pbc()])
+    for bond in [bond for bond in lattice.get_bonds() if bond.is_hor_pbc() or bond.is_top_pbc()]:
+        node_1, node_2 = bond.get_node1(), bond.get_node2()
+        if node_1 in (imag_y.difference(imag_x)) and node_2 in imag_x:
+            print(f"Removed double imaginary bond: {bond.get_node1().get_id()}, {bond.get_node2().get_id()}")
+            lattice.drop_bond(bond)
+        if node_1 in (imag_y.intersection(imag_x)) and node_2 not in (imag_y.union(imag_x)) and node_2.get_id() != 0:
+            print(f"Removed double imaginary bond: {bond.get_node1().get_id()}, {bond.get_node2().get_id()}")
+            lattice.drop_bond(bond)
 
     return lattice
 
@@ -103,39 +97,38 @@ def initialize_lattice(set_bonds_active: bool):
 def get_moduli(
         lattice: AbstractLattice, init_guesses: Optional[List[np.ndarray]]
 ) -> Tuple[List[float], List[MinimizationResult]]:
+    # Get the strains
+    strains = Parameters.strains
+
+    # Prepare initial guesses
     if init_guesses is None:
-        init_guesses = [None] * 4
+        init_guesses = [None] * len(strains)
+    # Set after the first minimization
+    reusable_results = None
+
     init_pos = pos.create_pos_matrix(lattice=lattice)
     area_lattice = lattice.get_length() * lattice.get_height()
 
-    shear_strain = Parameters.gamma
-    transformation_matrices = Parameters.transformations
     # --- Compute the response to each strain ---
-    moduli, min_results = [], []
-    reusable_results = None
-    for i, trans_matrix in enumerate(transformation_matrices):
-        sheared_pos = pos.transform_pos_matrix(pos_matrix=init_pos, transformation_matrix=trans_matrix)
-        minimization_result = run_minimization(lattice=lattice, init_guess=init_guesses[i], shear_strain=shear_strain,
-                                               sheared_pos=sheared_pos, trans_matrix=trans_matrix,
-                                               reusable_results=reusable_results)
+    min_results = []
+    for i, strain in enumerate(strains):
+        sheared_pos = strain.apply(pos_matrix=init_pos)
+        minimization_result = run_minimization(
+            lattice=lattice,
+            init_guess=init_guesses[i],
+            sheared_pos=sheared_pos,
+            strain=strain,
+            reusable_results=reusable_results
+        )
         reusable_results = minimization_result.reusable_results
-        modulus = 2 * minimization_result.final_energy / (area_lattice * Parameters.gamma ** 2)
-        print(f"Modulus for transformation {i}: {modulus}")
-        moduli.append(modulus)
+        # modulus = 2 * minimization_result.final_energy / (area_lattice * Parameters.gamma ** 2)
+        # print(f"Modulus for transformation {i}: {modulus}")
         min_results.append(minimization_result)
-    return moduli, min_results
-
-
-def get_rng() -> np.random.Generator:
-    # Get a random number generator (make new seed if required)
-    seed = Parameters.random_seed
-    rng = np.random.default_rng(seed)
-    return rng
+    return min_results
 
 
 def update_output_file(
         lattice: AbstractLattice,
-        moduli: List[float],
         minimization_results: List[MinimizationResult],
         output_handler: OutputHandler,
         bond_occupation: Optional[float] = None,
@@ -146,7 +139,7 @@ def update_output_file(
     if bond_occupation is None:
         bond_occupation = get_bond_occupation(lattice, disp=False)
     # Write the results to the output
-    output_handler.add_results(lattice=lattice, moduli=moduli, bond_occupation=bond_occupation,
+    output_handler.add_results(lattice=lattice, bond_occupation=bond_occupation,
                                minimization_results=minimization_results)
     shear_mod_result = minimization_results[-1]
     output_handler.create_pickle_visualizations(folder_name=str(round(bond_occupation, 6)), lattice=lattice,
@@ -172,21 +165,19 @@ def run_single_minimization(
 ) -> Tuple[List[float], List[MinimizationResult]]:
     get_bond_occupation(lattice, disp=True)  # Print out the bond occupation
 
-    moduli, minimization_results = get_moduli(lattice=lattice, init_guesses=prev_final_pos)
-    update_output_file(lattice=lattice, moduli=moduli,
-                       minimization_results=minimization_results, output_handler=output_handler,
+    minimization_results = get_moduli(lattice=lattice, init_guesses=prev_final_pos)
+    update_output_file(lattice=lattice, minimization_results=minimization_results, output_handler=output_handler,
                        bond_occupation=bond_occupation)
-    return moduli, minimization_results
+    return minimization_results
 
 
-def run_basin_protocol(lattice: AbstractLattice, output_handler: OutputHandler):
+def run_basin_protocol(lattice: AbstractLattice, output_handler: OutputHandler, rng: np.random.Generator):
     """
     Assigns each bond a random number s_i in (0, 1) and increases p: when p > s_i, we add the bond i
     """
 
-    rng = get_rng()
     # Start with an empty lattice and assign each bond a random number in (0, 1)
-    set_lattice_bonds(lattice=lattice, p_fill=0.0)
+    lattice.set_bonds(prob_fill=0.0)
     basin.assign_bond_levels(lattice=lattice, rng=rng)
     lattice.update_active_bonds()
 
@@ -206,7 +197,7 @@ def run_basin_protocol(lattice: AbstractLattice, output_handler: OutputHandler):
         next_bond.remove_bond()
         lattice.update_active_bonds()
 
-        moduli, minimization_results = run_single_minimization(lattice=lattice, prev_final_pos=prev_final_pos,
+        minimization_results = run_single_minimization(lattice=lattice, prev_final_pos=prev_final_pos,
                                                                output_handler=output_handler, bond_occupation=p)
         prev_final_pos = [result.final_pos for result in minimization_results]
 
@@ -214,57 +205,28 @@ def run_basin_protocol(lattice: AbstractLattice, output_handler: OutputHandler):
         p = get_bond_occupation(lattice=lattice, disp=False)
 
         # Termination conditions for adding: reach p_max. For removing: shear modulus is below tolerance
-        if max(moduli) < Parameters.moduli_tolerance:
-            break
-    return
-
-
-def run_p_range_protocol(lattice: AbstractLattice, output_handler: OutputHandler):
-    """
-    Runs the minimization for all values of prob_no_bond
-    """
-    for p in Parameters.prob_fills:
-        lattice.set_all_bonds_active()  # Reset all the bonds in case setting assumes a full lattice
-        set_lattice_bonds(lattice, p)
-        lattice.update_active_bonds()
-        run_single_minimization(lattice, None, output_handler)
+        # if max(moduli) < Parameters.moduli_tolerance:
+        #     break
     return
 
 
 def main():
-    start_time = time.time()
+    # Get the random number generator (make new seed if required)
+    seed = Parameters.random_seed
+    rng = np.random.default_rng(seed)
 
     # Result are taken care of by the dedicated handlers
     visualizer = Visualizer(params=Parameters.visualizer_parameters)
-    pickle_handler = VisualizationHandler(params=Parameters.pickle_handler_parameters, visualizer=visualizer)
-
+    visualization_handler = VisualizationHandler(params=Parameters.pickle_handler_parameters, visualizer=visualizer)
     output_handler = OutputHandler(parameter_path=inspect.getfile(Parameters),
-                                   params=Parameters.output_handler_parameters, pickle_handler=pickle_handler)
+                                   params=Parameters.output_handler_parameters,
+                                   visualization_handler=visualization_handler)
 
     # Initialize the lattice object
-    lattice = initialize_lattice(set_bonds_active=True)
-
-    # Slight hacky-fix. Remove bonds with double "imaginary positions" (i.e. bonds that are both periodic in x and y)
-    imag_x = set([bond.get_node1() for bond in lattice.bonds if bond.is_hor_pbc()])
-    imag_y = set([bond.get_node1() for bond in lattice.bonds if bond.is_top_pbc()])
-    for bond in [bond for bond in lattice.get_bonds() if bond.is_hor_pbc() or bond.is_top_pbc()]:
-        node_1, node_2 = bond.get_node1(), bond.get_node2()
-        if node_1 in (imag_y.difference(imag_x)) and node_2 in imag_x:
-            print(f"Removed double imaginary bond: {bond.get_node1().get_id()}, {bond.get_node2().get_id()}")
-            lattice.drop_bond(bond)
-        if node_1 in (imag_y.intersection(imag_x)) and node_2 not in (imag_y.union(imag_x)) and node_2.get_id() != 0:
-            print(f"Removed double imaginary bond: {bond.get_node1().get_id()}, {bond.get_node2().get_id()}")
-            lattice.drop_bond(bond)
-
-    # If we are generating from scratch, save the lattice object for future re-use
-    # if not Parameters.load_lattice:
-    #     file_name = f"{lattice.get_description()}.pickle"
-    #     output_handler.create_initial_lattice_object_pickle(lattice=lattice, file_name=file_name)
+    lattice = initialize_lattice(rng=rng)
 
     # Run the appropriate protocol
-    run_basin_protocol(lattice, output_handler)
-
-    print(f"Total time used: {time.time() - start_time} seconds")
+    run_basin_protocol(lattice=lattice, output_handler=output_handler, rng=rng)
 
 
 if __name__ == "__main__":

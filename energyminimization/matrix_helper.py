@@ -7,9 +7,9 @@ import numpy as np
 from scipy.sparse import csr_matrix
 
 from energyminimization.energies.bend import get_bend_hessian
-from energyminimization.energies.stretch import get_stretch_hessian
+from energyminimization.energies.stretch_linear import get_stretch_hessian
 from energyminimization.energies.transverse import get_transverse_hessian
-from energyminimization.transformations import transform_pos_matrix
+from energyminimization.transformations import transform_pos_matrix, Strain
 from lattice.abstract_lattice import AbstractLattice
 
 # Caching results when fetching the position matrix for a lattice
@@ -59,27 +59,25 @@ def create_r_matrix(
 
     :param pos_vector: Position of each node (will be reshaped) in order of
         [x_1, y_1, x_2, ...]
-    :type pos_vector: Must contain 2n elements
-    :param active_bond_indices: List containing indices of [i, j]
-    :type active_bond_indices: Shape (# bonds, 2) matrix
+    :param active_bond_indices: arrays containing indices of [node_i_index, node_j_index, hor_pbc, top_pbc, bond_idx]
     :param lattice: Lattice object
     :param normalize: Whether to normalize the vectors to unit vectors
-    :type normalize: bool
     :return: Shape (num_bonds, 2) matrix
     """
     pos_matrix = pos_vector.reshape((-1, 2))
-    # Change in x from node to node
+    # Indices of the nodes for each bond
     i, j = active_bond_indices[:, 0], active_bond_indices[:, 1]
+    r_matrix = pos_matrix[j, :] - pos_matrix[i, :]
 
     # Periodic boundary conditions require correction
     hor_pbc, top_pbc, idx = active_bond_indices[:, 2], active_bond_indices[:, 3], active_bond_indices[:, 4]
-
+    # Bond indices that are horizontal or top PBCs
     idx_hor = idx[np.where(hor_pbc == 1)]
     idx_top = idx[np.where(top_pbc == 1)]
     correction = np.zeros((len(active_bond_indices), 2))
     correction[idx_hor, 0] = lattice.get_length()
     correction[idx_top, 1] = lattice.get_height() + lattice.height_increment
-    r_matrix = pos_matrix[j, :] - pos_matrix[i, :] + correction
+    r_matrix += correction
 
     # Debugging: verify that r_matrix is correct
     # verify_r_matrix(pos_vector, r_matrix, lattice, active_bond_indices)
@@ -124,8 +122,7 @@ def verify_r_matrix(
 
 
 def create_correction_matrix(lattice: AbstractLattice, init_pos: np.ndarray,
-                             trans_matrix: np.ndarray,
-                             all_bond_indices: np.ndarray) -> np.ndarray:
+                             strain: Strain, all_bond_indices: np.ndarray) -> np.ndarray:
     """
     create_correction_matrix returns a matrix that ensures the displacements along PBCs are accounted for
     """
@@ -136,7 +133,7 @@ def create_correction_matrix(lattice: AbstractLattice, init_pos: np.ndarray,
     hor_pbc, top_pbc = all_bond_indices[:, 2], all_bond_indices[:, 3]
 
     # Apply transformation matrix to every vector in position matrix
-    trans_positions = transform_pos_matrix(pos_matrix=init_pos, transformation_matrix=trans_matrix)
+    trans_positions = strain.apply(pos_matrix=init_pos)
     u_matrix = trans_positions - init_pos
 
     # Find the "imaginary" position of the i nodes (greater x and/or y positions)
@@ -148,7 +145,7 @@ def create_correction_matrix(lattice: AbstractLattice, init_pos: np.ndarray,
     imag_pos[i_vert, 1] -= (lattice.get_height() + lattice.height_increment)
 
     # Compute where the imaginary positions are after applying the transformation
-    trans_imag_pos = (trans_matrix @ imag_pos.T).T
+    trans_imag_pos = strain.apply(pos_matrix=imag_pos)
     u_imag_matrix = trans_imag_pos - imag_pos
 
     # Correction is just the difference between the imaginary displacement and the real displacement

@@ -2,8 +2,6 @@
 Class representing Pi Bonds in lattice, a series of two co-linear bonds with a shared vertex node
 PiBonds two pointers to each of the bonds, as well as three pointers to the vertex, and two edge nodes
 """
-from typing import List
-
 from lattice.bond import Bond
 from lattice.node import Node
 
@@ -46,11 +44,11 @@ class PiBond(object):
         """
         return self.vertex
 
-    def get_edge_nodes(self) -> List[Node]:
+    def get_edge_nodes(self) -> tuple[Node]:
         """
         Returns a tuple containing the edge nodes of this pi-bond
         """
-        return [self.edge1, self.edge2]
+        return self.edge1, self.edge2
 
     def exists(self) -> bool:
         """

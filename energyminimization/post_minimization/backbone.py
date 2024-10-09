@@ -1,7 +1,7 @@
 import numpy as np
 
 import energyminimization.matrix_helper as pos
-from energyminimization.energies.stretch import get_stretch_energies
+from energyminimization.energies.stretch_linear import get_stretch_energies
 from lattice.abstract_lattice import AbstractLattice
 
 
