@@ -51,7 +51,7 @@ def get_nonlinear_stretch_hessian(
     c_ij_sq = np.square(c_ji)
     init_bond_lengths = active_bond_lengths[idx].reshape(-1, 1)
     curr_bond_lengths = l_ji.reshape(-1, 1)
-    # Formula is a * (1 - ((l0 * (c2_ij[!i]) / l^3))
+    # Formula is a * (1 - ((l0 * (c2_ij[!i]) / l^3)), where !i is y if i is x and vice versa
     dd = stretch_mod * (1 - np.divide(np.multiply(init_bond_lengths, c_ij_sq), np.power(curr_bond_lengths, 3)))
     dxx, dyy = dd[:, 1], dd[:, 0]
     # Formula is a * (l0 * (c_ij[0] * c_ij[1]) / l^3)
@@ -73,9 +73,11 @@ def get_nonlinear_stretch_jacobian(
     c_ji, l_ji, d_matrix = compute_lengths(pos_matrix=pos_matrix, active_bond_indices=active_bond_indices,
                                            corrections=corrections, active_bond_lengths=active_bond_lengths)
 
-    # Gradient is equal to -alpha * (l - l_0) * (c_ij / l)
+    # Gradient is equal to -alpha * ((l - l_0) / l) * c_ij. Compute the pre-factor
     grad_factor = -stretch_mod * np.divide(d_matrix, l_ji)
+    # Then multiply the pre-factor by the c_ij vectors
     grad = np.multiply(grad_factor.reshape(-1, 1), c_ji)
+    # The derivative with respect to x has only the x component. Same for y
     grad_x, grad_y = grad[:, 0], grad[:, 1]
 
     n_dof = pos_matrix.size

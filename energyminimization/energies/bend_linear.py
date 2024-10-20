@@ -82,7 +82,17 @@ def get_bend_jacobian(
     # Force applied to the vertex node
     grad_x = np.multiply(gradient_c, r_ji[:, 1])
     grad_y = np.multiply(gradient_c, r_ji[:, 0])
-    return bh.generate_jacobian(active_pi_indices=active_pi_indices, grad_x=grad_x, grad_y=grad_y, n=n_dof)
+
+    gradient = np.zeros(n_dof)
+    j, i, k = active_pi_indices[:, 0], active_pi_indices[:, 1], active_pi_indices[:, 2]
+    np.add.at(gradient, 2 * j, -2 * grad_x)
+    np.add.at(gradient, 2 * j + 1, 2 * grad_y)
+    # Force applied to the edge nodes (should be the same since they are 'rotating' around the center pivot)
+    np.add.at(gradient, 2 * i, grad_x)
+    np.add.at(gradient, 2 * i + 1, -grad_y)
+    np.add.at(gradient, 2 * k, grad_x)
+    np.add.at(gradient, 2 * k + 1, -grad_y)
+    return gradient
 
 
 def get_bend_energy(

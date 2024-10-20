@@ -70,19 +70,3 @@ def generate_hessian(
 
     return csr_matrix((data, (rows, cols)), shape=(n, n))
 
-def generate_jacobian(
-        active_pi_indices: np.ndarray,
-        grad_x: np.ndarray,
-        grad_y: np.ndarray,
-        n: int
-) -> np.ndarray:
-    gradient = np.zeros(n)
-    vertex, edge1, edge2 = active_pi_indices[:, 0], active_pi_indices[:, 1], active_pi_indices[:, 2]
-    np.add.at(gradient, 2 * vertex, -2 * grad_x)
-    np.add.at(gradient, 2 * vertex + 1, 2 * grad_y)
-    # Force applied to the edge nodes (should be the same since they are 'rotating' around the center pivot)
-    np.add.at(gradient, 2 * edge1, grad_x)
-    np.add.at(gradient, 2 * edge1 + 1, -grad_y)
-    np.add.at(gradient, 2 * edge2, grad_x)
-    np.add.at(gradient, 2 * edge2 + 1, -grad_y)
-    return gradient
