@@ -13,7 +13,6 @@ from energyminimization.solvers.minimization_type import MinimizationType
 from energyminimization.solvers.newton import trust_region_newton_cg
 from energyminimization.transformations import Strain
 from lattice.abstract_lattice import AbstractLattice
-from tests.matrix_tests import test_gradient_hessian, plot_sparsity
 
 
 @dataclass
