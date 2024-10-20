@@ -25,7 +25,6 @@ def initialize_lattice(rng: np.random.Generator) -> AbstractLattice:
         lattice_type=Parameters.lattice_type,
         length=Parameters.lattice_length,
         height=Parameters.lattice_height,
-        generate_pi_bonds=Parameters.bend_mod != 0,  # Naive optimization: only make pi bonds if bending is relevant
     )
 
     # --- Initialization steps ---

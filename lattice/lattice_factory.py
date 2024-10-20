@@ -16,7 +16,7 @@ from lattice.triangular_lattice import TriangularLattice
 class LatticeFactory:
     @staticmethod
     def create_lattice(
-            lattice_type: LatticeType, length: int, height: float, generate_pi_bonds: bool
+            lattice_type: LatticeType, length: int, height: float
     ) -> AbstractLattice:
         """
         Create a fresh lattice from scratch
@@ -24,7 +24,7 @@ class LatticeFactory:
         if lattice_type == LatticeType.KAGOME:
             return KagomeLattice(length=length, height=height)
         elif lattice_type == LatticeType.TRIANGULAR:
-            return TriangularLattice(length=length, height=height, generate_pi_bonds=generate_pi_bonds)
+            return TriangularLattice(length=length, height=height)
         elif lattice_type == LatticeType.SQUARE:
             return SquareLattice(length=length, height=height)
         else:

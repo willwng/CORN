@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from scipy.sparse import spmatrix, csr_matrix
 
 import energyminimization.energies.stretch_full as snl
+import energyminimization.energies.bend_full as bnl
 import energyminimization.matrix_helper as pos
 from energyminimization.matrix_helper import KMatrixResult
 from energyminimization.solvers.conjugate_gradient import conjugate_gradient
@@ -12,6 +13,7 @@ from energyminimization.solvers.minimization_type import MinimizationType
 from energyminimization.solvers.newton import trust_region_newton_cg
 from energyminimization.transformations import Strain
 from lattice.abstract_lattice import AbstractLattice
+from tests.matrix_tests import test_gradient_hessian, plot_sparsity
 
 
 @dataclass
@@ -162,7 +164,11 @@ def nonlinear_solve(params: SolveParameters):
                                                      corrections=correction,
                                                      active_bond_indices=params.active_bond_indices,
                                                      active_bond_lengths=params.length_matrix)
-        bend_energy = 0
+        bend_energy = bnl.get_bend_energy(bend_mod=params.bend_mod,
+                                          pos_matrix=pos_matrix,
+                                          corrections=correction,
+                                          active_pi_indices=params.active_pi_indices,
+                                          orig_pi_angles=params.angle_matrix)
         return stretch_energy + bend_energy
 
     def compute_total_gradient(pos_matrix: np.ndarray) -> np.ndarray:
@@ -172,16 +178,28 @@ def nonlinear_solve(params: SolveParameters):
             corrections=correction,
             active_bond_indices=params.active_bond_indices,
             active_bond_lengths=params.length_matrix)
-        bend_grad = np.zeros_like(pos_matrix)
-        return stretch_grad.ravel()
+        bend_grad = bnl.get_bend_jacobian(
+            bend_mod=params.bend_mod,
+            pos_matrix=pos_matrix,
+            corrections=correction,
+            active_pi_indices=params.active_pi_indices,
+            orig_pi_angles=params.angle_matrix)
+        return stretch_grad.ravel() + bend_grad.ravel()
 
     def compute_total_hessian(pos_matrix: np.ndarray) -> csr_matrix:
-        return snl.get_nonlinear_stretch_hessian(
+        stretch_hess = snl.get_nonlinear_stretch_hessian(
             stretch_mod=params.stretch_mod,
             pos_matrix=pos_matrix,
             corrections=correction,
             active_bond_indices=params.active_bond_indices,
             active_bond_lengths=params.length_matrix)
+        bend_hess = bnl.get_bend_hessian(
+            bend_mod=params.bend_mod,
+            pos_matrix=pos_matrix,
+            corrections=correction,
+            active_pi_indices=params.active_pi_indices,
+            orig_pi_angles=params.angle_matrix)
+        return stretch_hess + bend_hess
 
     init_energy = compute_total_energy(pos_matrix=params.strained_pos)
 

@@ -7,7 +7,7 @@ from datetime import datetime
 import numpy as np
 
 from energyminimization.solvers.solver import MinimizationType
-from energyminimization.transformations import StretchX, StretchY
+from energyminimization.transformations import StretchX, StretchY, Shear, Dilate
 from lattice.lattice_type import LatticeType
 from result_handling.output_handler import OutputHandlerParameters
 from result_handling.pickle_handler import VisualizationHandlerParameters
@@ -36,7 +36,7 @@ class Parameters:
 
     # ----- Bond Occupation Protocol -----
     # Starting p_fill value
-    prob_fill_high: float = 0.68
+    prob_fill_high: float = 0.6
     # When we remove bonds, this is our stopping criteria: all the moduli are below this value
     moduli_tolerance: float = 1e-8
 

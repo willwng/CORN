@@ -105,21 +105,22 @@ def minimize(
 
     # [vertex id, edge node 1 id, edge node 2 id, bond 1 id, bond 2 id, pi bond id, sign for r_matrix[bond id], horizontal PBC, top PBC]
     active_pi_bonds = lattice.get_active_pi_bonds()
-    active_pi_indices = np.zeros((len(active_pi_bonds), 11), dtype=np.int32)
+    active_pi_indices = np.zeros((len(active_pi_bonds), 12), dtype=np.int32)
     for i, pi_bond in enumerate(active_pi_bonds):
         assert (pi_bond.exists())
-        active_pi_indices[i][0] = pi_bond.get_vertex_node().get_id()
-        active_pi_indices[i][1] = pi_bond.get_edge_nodes()[0].get_id()
-        active_pi_indices[i][2] = pi_bond.get_edge_nodes()[1].get_id()
+        active_pi_indices[i][0] = pi_bond.get_vertex_node().get_id() # j
+        active_pi_indices[i][1] = pi_bond.get_edge_nodes()[0].get_id() # i
+        active_pi_indices[i][2] = pi_bond.get_edge_nodes()[1].get_id() # k
         active_pi_indices[i][3] = bond_to_idx[pi_bond.get_bond1()]
         active_pi_indices[i][4] = bond_to_idx[pi_bond.get_bond1()]
         active_pi_indices[i][5] = i
-        active_pi_indices[i][6] = 1 if pi_bond.get_bond1().get_node1() == pi_bond.get_vertex_node() else -1
+        active_pi_indices[i][6] = 1 if pi_bond.get_bond1().get_node1() == pi_bond.get_vertex_node() else -1 # sign 1
+        active_pi_indices[i][7] = 1 if pi_bond.get_bond2().get_node1() == pi_bond.get_vertex_node() else -1 # sign 2
         # PBC
-        active_pi_indices[i][7] = pi_bond.get_bond1().is_hor_pbc()
-        active_pi_indices[i][8] = pi_bond.get_bond1().is_top_pbc()
-        active_pi_indices[i][9] = pi_bond.get_bond2().is_hor_pbc()
-        active_pi_indices[i][10] = pi_bond.get_bond2().is_top_pbc()
+        active_pi_indices[i][8] = pi_bond.get_bond1().is_hor_pbc()
+        active_pi_indices[i][9] = pi_bond.get_bond1().is_top_pbc()
+        active_pi_indices[i][10] = pi_bond.get_bond2().is_hor_pbc()
+        active_pi_indices[i][11] = pi_bond.get_bond2().is_top_pbc()
 
     # 2. Convert lattice positions to matrices
     # Initial position of nodes, initial unit vectors for bonds, initial energy

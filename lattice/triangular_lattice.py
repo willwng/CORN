@@ -43,7 +43,7 @@ class TriangularLattice(AbstractLattice):
     def generate_bonds(self) -> None:
         super().generate_bonds()
 
-    def __init__(self, length: int, height: float, generate_pi_bonds: bool):
+    def __init__(self, length: int, height: float):
         self.length = length
         self.height = height
         self.nodes = []
@@ -54,5 +54,4 @@ class TriangularLattice(AbstractLattice):
         self.height_increment = math.sqrt(3.0) / 2.0
         self.generate_nodes(length, height)
         self.generate_bonds()
-        if generate_pi_bonds:
-            self.generate_pi_bonds()
+        self.generate_pi_bonds()

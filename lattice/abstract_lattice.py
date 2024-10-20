@@ -93,7 +93,7 @@ class AbstractLattice:
 
     def remove_bond(self, bond: Bond) -> None:
         """
-        Removes a bond from the lattice
+        Deactivate a bond from the lattice (does not remove the object, just sets it inactive)
         """
         bond.set_inactive()
         self.active_bonds.remove(bond)
@@ -342,56 +342,65 @@ class AbstractLattice:
         self.update_active_bonds()
         return
 
+    def check_bonds_colinear(self, bond_i: Bond, bond_j: Bond, vertex: Node):
+        """
+        Checks if two bonds are co-linear
+        """
+        # Find the unit vector of each bond
+        pos_i1, pos_i2 = bond_i.get_xy_xy()
+        r_i = np.subtract(pos_i2, pos_i1)
+        if bond_i.is_hor_pbc():
+            r_i[0] = r_i[0] + self.length
+        if bond_i.is_top_pbc():
+            r_i[1] = r_i[1] + self.height + self.height_increment
+        r_i = r_i / np.linalg.norm(r_i, axis=0)
+
+        # Vector from vertex node to edge (if sign_i is 1). Flipped if sign_i is -1
+        sign_i = 1 if bond_i.get_node1() == vertex else -1
+        r_i = sign_i * r_i
+
+        pos_j1, pos_j2 = bond_j.get_xy_xy()
+        r_j = np.subtract(pos_j2, pos_j1)
+        if bond_j.is_hor_pbc():
+            r_j[0] = r_j[0] + self.length
+        if bond_j.is_top_pbc():
+            r_j[1] = r_j[1] + self.height + self.height_increment
+        r_j = r_j / np.linalg.norm(r_j, axis=0)
+
+        sign_j = 1 if bond_j.get_node1() == vertex else -1
+        r_j = sign_j * r_j
+
+        angle = np.arctan2(np.cross(r_i, r_j), np.dot(r_i, r_j))
+        if angle < 0:
+            angle = angle + 2 * np.pi
+        return abs(abs(angle) - np.pi) < 0.01
+
     def generate_pi_bonds(self) -> None:
         """
-        Generates the pi bonds in the lattice
-        (series of two co-linear bonds with a node vertex)
+        Generates the pi bonds in the lattice (series of two co-linear bonds with a node vertex)
         """
         self.pi_bonds = []
-        # If dictionary doesn't exist, use a brute method
+        # If the pre-made dictionary doesn't exist, use a brute force method
         if not self.node_bonds_dic:
             self.brute_generate_pi_bonds()
             return
 
+        # Otherwise we can use the dictionary that maps nodes to the bonds that contain them
+        #   (essentially iterating over possible vertices)
         for node in self.node_bonds_dic.keys():
             bonds = self.node_bonds_dic[node]
+            # Iterate through possible pairs of bonds that contain [node]
             for i in range(len(bonds) - 1):
                 bond_i = bonds[i]
                 for j in range(i + 1, len(bonds)):
                     bond_j = bonds[j]
-                    # Define vertex and edges
+
+                    # Define vertex and edge nodes
                     vertex = node
                     e1 = (bond_i.get_node1() if node != bond_i.get_node1() else bond_i.get_node2())
                     e2 = (bond_j.get_node1() if node != bond_j.get_node1() else bond_j.get_node2())
 
-                    # Get positions of the two nodes per each of two bonds
-                    pos1_i = bond_i.get_node1().get_xy()
-                    pos2_i = bond_i.get_node2().get_xy()
-                    pos1_j = bond_j.get_node1().get_xy()
-                    pos2_j = bond_j.get_node2().get_xy()
-
-                    # Find the unit vector of each bond
-                    r_i = np.subtract(pos2_i, pos1_i)
-                    r_j = np.subtract(pos2_j, pos1_j)
-
-                    # Account for edge bonds being shorter in distance
-                    if bond_i.is_hor_pbc():
-                        if pos1_i[0] > pos2_i[0]:
-                            r_i[0] = r_i[0] + self.length
-                        else:
-                            r_i[0] = r_i[0] - self.length
-                    if bond_j.is_hor_pbc():
-                        if pos1_j[0] > pos2_j[0]:
-                            r_j[0] = r_j[0] + self.length
-                        else:
-                            r_j[0] = r_j[0] - self.length
-
-                    # Normalize
-                    r_i = r_i / np.linalg.norm(r_i, axis=0)
-                    r_j = r_j / np.linalg.norm(r_j, axis=0)
-                    # The two bonds should be co-linear
-                    cos_phi = np.dot(r_i, r_j)
-                    if abs(abs(cos_phi) - 1) < 0.01:
+                    if self.check_bonds_colinear(bond_i, bond_j, vertex):
                         pi_bond = PiBond(bond_i, bond_j, vertex, e1, e2)
                         self.pi_bonds.append(pi_bond)
         print("Generated " + str(len(self.pi_bonds)) + " pi bonds")
@@ -405,83 +414,38 @@ class AbstractLattice:
         # Loop through the bonds to find common vertices (node with two bonds)
         num_bonds = len(self.bonds)
         bonds = self.bonds
-        vertices = 0
-        vertex = None
-        e1, e2 = None, None
+        # Iterate through pairs of bonds
         for i in range(num_bonds - 1):
             bond_i = bonds[i]
             for j in range(i + 1, num_bonds):
                 bond_j = bonds[j]
                 # Whether these two bonds are joined by a common node vertex
-                is_vertex = False
-                # First node of first bond is first node of second bond
+                found_common_vertex = False
                 if bond_i.get_node1() == bond_j.get_node1():
-                    is_vertex = True
+                    found_common_vertex = True
                     vertex = bond_i.get_node1()
                     e1 = bond_i.get_node2()
                     e2 = bond_j.get_node2()
-                # Second node of first bond is second node of second bond
                 elif bond_i.get_node2() == bond_j.get_node2():
-                    is_vertex = True
+                    found_common_vertex = True
                     vertex = bond_i.get_node2()
                     e1 = bond_i.get_node1()
                     e2 = bond_j.get_node1()
-                # First node of first bond is second node of second bond
                 elif bond_i.get_node1() == bond_j.get_node2():
-                    is_vertex = True
+                    found_common_vertex = True
                     vertex = bond_i.get_node1()
                     e1 = bond_i.get_node2()
                     e2 = bond_j.get_node1()
-                # Second node of first bond is first node of second bond
                 elif bond_i.get_node2() == bond_j.get_node1():
-                    is_vertex = True
+                    found_common_vertex = True
                     vertex = bond_i.get_node2()
                     e1 = bond_i.get_node1()
                     e2 = bond_j.get_node2()
-                if is_vertex:
-                    vertices += 1
-                    # Get positions of the two nodes per each of two bonds
-                    pos1_i = bond_i.get_node1().get_xy()
-                    pos2_i = bond_i.get_node2().get_xy()
-                    pos1_j = bond_j.get_node1().get_xy()
-                    pos2_j = bond_j.get_node2().get_xy()
+                # If no common vertex, continue
+                if not found_common_vertex:
+                    continue
 
-                    # Find the unit vector of each bond
-                    r_i = np.subtract(pos2_i, pos1_i)
-                    r_j = np.subtract(pos2_j, pos1_j)
-
-                    # Account for edge bonds being shorter in distance
-                    if bond_i.is_hor_pbc():
-                        if pos1_i[0] > pos2_i[0]:
-                            r_i[0] = r_i[0] + self.length
-                        else:
-                            r_i[0] = r_i[0] - self.length
-                    if bond_j.is_hor_pbc():
-                        if pos1_j[0] > pos2_j[0]:
-                            r_j[0] = r_j[0] + self.length
-                        else:
-                            r_j[0] = r_j[0] - self.length
-
-                    # Account for top periodic bonds being shorter in distance
-                    height_change = self.height + self.height_increment
-                    if bond_i.is_temporary():
-                        if pos1_i[1] > pos2_i[1]:
-                            r_i[1] = r_i[1] + height_change
-                        else:
-                            r_i[1] = r_i[1] - height_change
-                    if bond_j.is_temporary():
-                        if pos1_j[1] > pos2_j[1]:
-                            r_j[1] = r_j[1] + height_change
-                        else:
-                            r_j[1] = r_j[1] - height_change
-
-                    # Normalize
-                    r_i = r_i / np.linalg.norm(r_i, axis=0)
-                    r_j = r_j / np.linalg.norm(r_j, axis=0)
-                    # The two bonds should be co-linear
-                    cos_phi = np.dot(r_i, r_j)
-                    if abs(abs(cos_phi) - 1) < 0.01:
-                        pi_bond = PiBond(bond_i, bond_j, vertex, e1, e2)
-                        self.pi_bonds.append(pi_bond)
+                if self.check_bonds_colinear(bond_i, bond_j, vertex):
+                    pi_bond = PiBond(bond_i, bond_j, vertex, e1, e2)
+                    self.pi_bonds.append(pi_bond)
         print("Generated " + str(len(self.pi_bonds)) + " pi bonds")
-        # print("Generated " + str(vertices) + " vertices")

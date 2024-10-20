@@ -124,26 +124,34 @@ def verify_r_matrix(
 def create_angle_matrix(
         pos_vector: np.ndarray,
         active_pi_indices: np.ndarray,
-        corrections: np.ndarray,
+        lattice: AbstractLattice,
 ) -> np.ndarray:
     """
-    Matrix size (# pi bonds, 1) where value at index i is the angle for pi bond index i
+    Matrix size (# pi bonds, 1) containing the *initial* angles for each pi bond
     """
     pos_matrix = pos_vector.reshape(-1, 2)
 
     j, i, k = active_pi_indices[:, 0], active_pi_indices[:, 1], active_pi_indices[:, 2]
-    hor_pbc1, top_pbc1 = active_pi_indices[:, 7], active_pi_indices[:, 8]
-    hor_pbc2, top_pbc2 = active_pi_indices[:, 9], active_pi_indices[:, 10]
+    hor_pbc1, top_pbc1 = active_pi_indices[:, 8], active_pi_indices[:, 9]
+    hor_pbc2, top_pbc2 = active_pi_indices[:, 10], active_pi_indices[:, 11]
+    sign_i, sign_j = active_pi_indices[:, 6], active_pi_indices[:, 7]
 
-    # Vectors from vertex node j to the edge nodes i and k
-    c_ji = pos_matrix[j] - pos_matrix[i]
-    c_jk = pos_matrix[j] - pos_matrix[k]
+    # Vectors from vertex node j to edge nodes i and k
+    c_ji = pos_matrix[i] - pos_matrix[j]
+    c_jk = pos_matrix[k] - pos_matrix[j]
     # Handle periodic boundary conditions
-    c_ji[np.where(hor_pbc1 == 1), 0] += corrections[0]
-    c_ji[np.where(top_pbc1 == 1), 1] += corrections[1]
-    c_jk[np.where(hor_pbc2 == 1), 0] += corrections[0]
-    c_jk[np.where(top_pbc2 == 1), 1] += corrections[1]
+    corrections = np.array([lattice.get_length(), lattice.get_height() + lattice.height_increment])
+    idx_hor_i = np.where(hor_pbc1 == 1)
+    idx_top_i = np.where(top_pbc1 == 1)
+    idx_hor_j = np.where(hor_pbc2 == 1)
+    idx_top_j = np.where(top_pbc2 == 1)
+    # The PBC correction depends on which node is the vertex (determined by sign)
+    c_ji[idx_hor_i, 0] += sign_i[idx_hor_i] * corrections[0]
+    c_ji[idx_top_i, 1] += sign_i[idx_top_i] * corrections[1]
+    c_jk[idx_hor_j, 0] += sign_j[idx_hor_j] * corrections[0]
+    c_jk[idx_top_j, 1] += sign_j[idx_top_j] * corrections[1]
 
+    # Compute the angle between the two vectors
     angle_matrix = np.arctan2(np.cross(c_ji, c_jk), np.einsum('ij,ij->i', c_ji, c_jk))
     angle_matrix[angle_matrix < 0] += 2 * np.pi
     return angle_matrix

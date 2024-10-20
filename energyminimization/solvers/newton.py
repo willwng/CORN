@@ -162,7 +162,7 @@ def tr_solve(f0, x, g, A, max_iter, tol, trust_radius):
 
 def trust_region_newton_cg(fun, x0, jac, hess, g_tol=1e-8):
     # --- Initialize trust-region ---
-    trust_radius = 1.0
+    trust_radius = 10.0
     max_trust_radius = 1e3
     eta = 0.15
 

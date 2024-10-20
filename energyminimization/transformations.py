@@ -42,6 +42,11 @@ class Shear(Strain):
         super().__init__(gamma, transformation)
         self.name = "shear"
 
+class Random(Strain):
+    def __init__(self, gamma: float):
+        transformation = np.array([[1 + gamma * np.random.uniform(), gamma * np.random.uniform()], [gamma * np.random.uniform(), 1 + gamma * np.random.uniform()]])
+        super().__init__(gamma, transformation)
+        self.name = "random"
 
 class Dilate(Strain):
     def __init__(self, gamma: float):
