@@ -6,7 +6,7 @@ from typing import List, Tuple, Dict
 import numpy as np
 from scipy.sparse import csr_matrix
 
-from energyminimization.energies.bend import get_bend_hessian
+from energyminimization.energies.bend_linear import get_bend_hessian
 from energyminimization.energies.stretch_linear import get_stretch_hessian
 from energyminimization.energies.transverse import get_transverse_hessian
 from energyminimization.transformations import Strain
@@ -121,10 +121,39 @@ def verify_r_matrix(
     return
 
 
+def create_angle_matrix(
+        pos_vector: np.ndarray,
+        active_pi_indices: np.ndarray,
+        corrections: np.ndarray,
+) -> np.ndarray:
+    """
+    Matrix size (# pi bonds, 1) where value at index i is the angle for pi bond index i
+    """
+    pos_matrix = pos_vector.reshape(-1, 2)
+
+    j, i, k = active_pi_indices[:, 0], active_pi_indices[:, 1], active_pi_indices[:, 2]
+    hor_pbc1, top_pbc1 = active_pi_indices[:, 7], active_pi_indices[:, 8]
+    hor_pbc2, top_pbc2 = active_pi_indices[:, 9], active_pi_indices[:, 10]
+
+    # Vectors from vertex node j to the edge nodes i and k
+    c_ji = pos_matrix[j] - pos_matrix[i]
+    c_jk = pos_matrix[j] - pos_matrix[k]
+    # Handle periodic boundary conditions
+    c_ji[np.where(hor_pbc1 == 1), 0] += corrections[0]
+    c_ji[np.where(top_pbc1 == 1), 1] += corrections[1]
+    c_jk[np.where(hor_pbc2 == 1), 0] += corrections[0]
+    c_jk[np.where(top_pbc2 == 1), 1] += corrections[1]
+
+    angle_matrix = np.arctan2(np.cross(c_ji, c_jk), np.einsum('ij,ij->i', c_ji, c_jk))
+    angle_matrix[angle_matrix < 0] += 2 * np.pi
+    return angle_matrix
+
+
 def create_correction_matrix(lattice: AbstractLattice, init_pos: np.ndarray,
                              strain: Strain, all_bond_indices: np.ndarray) -> np.ndarray:
     """
     create_correction_matrix returns a matrix that ensures the displacements along PBCs are accounted for
+    Shape (n, 2) matrix where n is the number of nodes
     """
     init_pos = init_pos.reshape((-1, 2))
     correction_matrix = np.zeros_like(init_pos)
@@ -136,11 +165,13 @@ def create_correction_matrix(lattice: AbstractLattice, init_pos: np.ndarray,
     trans_positions = strain.apply(pos_matrix=init_pos)
     u_matrix = trans_positions - init_pos
 
-    # Find the "imaginary" position of the i nodes (greater x and/or y positions)
+    # Find the "imaginary" position of the i nodes (nodes that are used in PBCs)
     imag_pos = init_pos.copy()
+    # Indices for horizontal PBC, vertical PBC, any PBC
     i_hor = i[np.where(hor_pbc == 1)]
     i_vert = i[np.where(top_pbc == 1)]
     i_correction = i[np.where((hor_pbc == 1) | (top_pbc == 1))]
+    # Compute the relevant corrections (i's original position always has greater x or y)
     imag_pos[i_hor, 0] -= lattice.get_length()
     imag_pos[i_vert, 1] -= (lattice.get_height() + lattice.height_increment)
 
@@ -170,7 +201,7 @@ def create_u_matrix(pos_matrix: np.ndarray, init_pos: np.ndarray) -> np.ndarray:
 
 class KMatrixResult:
     """
-    Wrapper class for obtaining the K matrices and computing values (e.g., quadratic forms)
+    Wrapper class for obtaining the Hessian/K matrices and computing values (e.g., quadratic forms)
     """
     k_stretch: csr_matrix
     k_bend: csr_matrix

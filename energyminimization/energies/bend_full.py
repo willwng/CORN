@@ -1,9 +1,64 @@
 """
-bend.py is used to calculate the energy and the forces from bending (pi bonds)
+Bending forces with non-linear effects (uses full form of 1/2 κ(theta-theta0)^2)
 """
 
 import numpy as np
 from scipy.sparse import csr_matrix
+
+import energyminimization.energies.bend_helper as bh
+
+
+def compute_angles(
+        pos_matrix: np.ndarray,
+        corrections: np.ndarray,
+        active_pi_indices: np.ndarray,
+        orig_pi_angles: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Computes the vector between each node (c_ij), the length of each bond, and the difference between the
+        current length and the rest length
+    :return: c_ji (contains vectors from node j to i for each bond), length_ji (length of each bond),
+        d_ji (difference between current length and rest length)
+    """
+    pos_matrix = pos_matrix.reshape(-1, 2)
+    j, i, k = active_pi_indices[:, 0], active_pi_indices[:, 1], active_pi_indices[:, 2]
+    bond1_idx, bond2_idx, pi_idx = active_pi_indices[:, 3], active_pi_indices[:, 4], active_pi_indices[:, 5]
+    hor_pbc1, top_pbc1 = active_pi_indices[:, 7], active_pi_indices[:, 8]
+    hor_pbc2, top_pbc2 = active_pi_indices[:, 9], active_pi_indices[:, 10]
+    # Vectors out of the vertex node
+    c_ji = pos_matrix[j] - pos_matrix[i]
+    c_jk = pos_matrix[j] - pos_matrix[k]
+    # Handle periodic boundary conditions
+    c_ji[np.where(hor_pbc1 == 1), 0] += corrections[0]
+    c_ji[np.where(top_pbc1 == 1), 1] += corrections[1]
+    c_jk[np.where(hor_pbc2 == 1), 0] += corrections[0]
+    c_jk[np.where(top_pbc2 == 1), 1] += corrections[1]
+
+    theta_jik = np.arctan2(np.cross(c_ji, c_jk), np.einsum('ij,ij->i', c_ji, c_jk))
+    theta_jik[theta_jik < 0] += 2 * np.pi
+    # Differences in theta
+    d_jik = theta_jik - orig_pi_angles[pi_idx]
+    return theta_jik, d_jik
+
+
+def compute_angles(
+        u_node_matrix: np.ndarray,
+        r_matrix: np.ndarray,
+        active_pi_indices: np.ndarray,
+) -> np.ndarray:
+    """
+    Computes the angle for each pi bond
+    """
+    u_node_matrix = u_node_matrix.reshape(-1, 2)
+    j, i, k = active_pi_indices[:, 0], active_pi_indices[:, 1], active_pi_indices[:, 2]
+    bond1_idx, bond2_idx, pi_idx = active_pi_indices[:, 3], active_pi_indices[:, 4], active_pi_indices[:, 5]
+
+    # c_ij points from j to i based on their current positions
+    c_ij = np.subtract(r_matrix[bond1_idx], np.subtract(u_node_matrix[i, :], u_node_matrix[j, :]))
+    c_kj = np.subtract(r_matrix[bond2_idx], np.subtract(u_node_matrix[j, :], u_node_matrix[k, :]))
+
+    theta = np.arctan2(np.cross(c_ij, c_kj), np.dot(c_ij, c_kj))
+    return theta
 
 
 def add_entry(rows, cols, data, i, r, c, v):
@@ -104,69 +159,20 @@ def get_bend_jacobian(
         r_matrix: np.ndarray,
         active_pi_indices: np.ndarray
 ) -> np.ndarray:
-    """
-    Returns the gradient [[fx_1, fy_1], [fx2, fy2]...] for bending forces
-
-    :param bend_mod: kappa - bending modulus
-    :type bend_mod: float
-    :param r_matrix: matrix containing unit vectors between each node.
-        Example: r_matrix[i][j] returns the
-    unit vector [r_x, r_y] between nodes i and j
-    :type r_matrix: Shape (n, n, 2) matrix
-    :param u_matrix: matrix containing displacement vectors for each node
-        compared to initial position
-    Example: u_matrix[i] returns u_i
-    :type u_matrix: Shape (n, 2) matrix
-    :param active_pi_indices: List containing indices of [vertex (j), i, k]
-    :type active_pi_indices: Shape (# pi-bonds, 3) matrix
-    :return: gradient for bending forces for each node
-    :rtype: shape (2n,) vector where the forces are [fx_1, fy_1, fx_2, fy_2]
-    """
-    n = u_matrix.size
-    gradient = np.zeros(n)
-    vertex, edge1, edge2 = active_pi_indices[:, 0], active_pi_indices[:, 1], active_pi_indices[:, 2]
-    idx, sign = active_pi_indices[:, 3], active_pi_indices[:, 4]
-    # Get the coefficient of the gradient
-    r_ji = r_matrix[idx] * sign[:, np.newaxis]
-    gradient_c = -bend_mod * np.cross((2 * u_matrix[vertex, :] - u_matrix[edge1, :] - u_matrix[edge2, :]), r_ji)
-    # Force applied to the vertex node
-    grad_x = np.multiply(gradient_c, r_ji[:, 1])
-    grad_y = np.multiply(gradient_c, r_ji[:, 0])
-
-    np.add.at(gradient, 2 * vertex, -2 * grad_x)
-    np.add.at(gradient, 2 * vertex + 1, 2 * grad_y)
-    # Force applied to the edge nodes (should be the same since they are 'rotating' around the center pivot)
-    np.add.at(gradient, 2 * edge1, grad_x)
-    np.add.at(gradient, 2 * edge1 + 1, -grad_y)
-    np.add.at(gradient, 2 * edge2, grad_x)
-    np.add.at(gradient, 2 * edge2 + 1, -grad_y)
-    return gradient
+    theta, diff_theta = compute_angles(u_node_matrix=u_matrix, r_matrix=r_matrix, active_pi_indices=active_pi_indices)
+    # Gradient is equal to -(kappa) * (theta - theta_0) *
+    grad_x, grad_y = np.zeros(n_dof), np.zeros(n_dof)
+    n_dof = u_matrix.size
+    return bh.generate_jacobian(active_pi_indices=active_pi_indices, grad_x=grad_x, grad_y=grad_y, n=n_dof)
 
 
 def get_bend_energy(
         bend_mod: float,
-        u_matrix: np.ndarray,
-        r_matrix: np.ndarray,
-        active_pi_indices: np.ndarray
+        pos_matrix: np.ndarray,
+        corrections: np.ndarray,
+        active_pi_indices: np.ndarray,
+        orig_pi_angles: np.ndarray
 ) -> float:
-    """
-    get_bend_energy returns the energy and the gradient associated with the
-        bending forces
-    :param bend_mod: bending modulus (kappa)
-    :type bend_mod: float
-    :param u_matrix: displacement field matrix
-    :type u_matrix: Shape (n, 2) matrix
-    :param r_matrix: matrix containing unit vectors between each node
-    :type r_matrix: Shape (n, n, 2) matrix
-    :param active_pi_indices: List containing indices of [vertex (j), i, k]
-    :type active_pi_indices: Shape (# pi-bonds, 3) matrix
-    :return: energy associated with the pi bond and the gradient associated
-        with each node x, y
-    :rtype: float
-    """
-    j, i, k = active_pi_indices[:, 0], active_pi_indices[:, 1], active_pi_indices[:, 2]
-    idx, sign = active_pi_indices[:, 3], active_pi_indices[:, 4]
-    r_ji = r_matrix[idx] * sign[:, np.newaxis]
-    energy = 0.5 * bend_mod * np.square(
-        np.cross((2 * u_matrix[j, :] - u_matrix[i, :] - u_matrix[k, :]), r_ji))
-    return np.sum(energy)
+    _, d_theta = compute_angles(pos_matrix=pos_matrix, corrections=corrections, active_pi_indices=active_pi_indices,
+                                orig_pi_angles=orig_pi_angles)
+    return 0.5 * bend_mod * np.sum(np.square(d_theta))

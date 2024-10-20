@@ -1,3 +1,7 @@
+"""
+A helper script for generating Hessian and Jacobian matrices for stretch energy
+    - Linear and nonlinear stretching have the same "structure" for these
+"""
 import numpy as np
 from scipy.sparse import csr_matrix
 

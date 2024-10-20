@@ -103,20 +103,23 @@ def minimize(
     # Same as all_bond_indices but only for active bonds
     active_bond_indices = all_bond_indices[all_bond_indices[:, 4] != -1]
 
-    # [vertex id, edge node 1 id, edge node 2 id, bond 1 id, pi bond id, sign for r_matrix[bond id], horizontal PBC, top PBC]
+    # [vertex id, edge node 1 id, edge node 2 id, bond 1 id, bond 2 id, pi bond id, sign for r_matrix[bond id], horizontal PBC, top PBC]
     active_pi_bonds = lattice.get_active_pi_bonds()
-    active_pi_indices = np.zeros((len(active_pi_bonds), 8), dtype=np.int32)
+    active_pi_indices = np.zeros((len(active_pi_bonds), 11), dtype=np.int32)
     for i, pi_bond in enumerate(active_pi_bonds):
         assert (pi_bond.exists())
         active_pi_indices[i][0] = pi_bond.get_vertex_node().get_id()
         active_pi_indices[i][1] = pi_bond.get_edge_nodes()[0].get_id()
         active_pi_indices[i][2] = pi_bond.get_edge_nodes()[1].get_id()
         active_pi_indices[i][3] = bond_to_idx[pi_bond.get_bond1()]
-        active_pi_indices[i][4] = i
-        active_pi_indices[i][5] = 1 if pi_bond.get_bond1().get_node1() == pi_bond.get_vertex_node() else -1
-        # PBC if only one of the bonds is periodic
-        active_pi_indices[i][6] = pi_bond.get_bond1().is_hor_pbc() ^ pi_bond.get_bond2().is_hor_pbc()
-        active_pi_indices[i][7] = pi_bond.get_bond1().is_top_pbc() ^ pi_bond.get_bond2().is_top_pbc()
+        active_pi_indices[i][4] = bond_to_idx[pi_bond.get_bond1()]
+        active_pi_indices[i][5] = i
+        active_pi_indices[i][6] = 1 if pi_bond.get_bond1().get_node1() == pi_bond.get_vertex_node() else -1
+        # PBC
+        active_pi_indices[i][7] = pi_bond.get_bond1().is_hor_pbc()
+        active_pi_indices[i][8] = pi_bond.get_bond1().is_top_pbc()
+        active_pi_indices[i][9] = pi_bond.get_bond2().is_hor_pbc()
+        active_pi_indices[i][10] = pi_bond.get_bond2().is_top_pbc()
 
     # 2. Convert lattice positions to matrices
     # Initial position of nodes, initial unit vectors for bonds, initial energy
@@ -129,12 +132,14 @@ def minimize(
                                         normalize=False)
     length_matrix = np.linalg.norm(length_matrix, axis=1)
 
+    angle_matrix = pos.create_angle_matrix(pos_vector=init_pos, active_pi_indices=active_pi_indices, lattice=lattice)
     # 3. Solve for the final relaxed position
-    solve_params = solver.SolveParameters(lattice=lattice, init_pos=init_pos, sheared_pos=sheared_pos,
+    solve_params = solver.SolveParameters(lattice=lattice, strain=strain, init_pos=init_pos, strained_pos=sheared_pos,
                                           init_guess=init_guess, r_matrix=r_matrix, correction_matrix=correction_matrix,
-                                          length_matrix=length_matrix, active_bond_indices=active_bond_indices,
-                                          active_pi_indices=active_pi_indices, stretch_mod=stretch_mod,
-                                          bend_mod=bend_mod, tran_mod=tran_mod, tolerance=tolerance)
+                                          length_matrix=length_matrix, angle_matrix=angle_matrix,
+                                          active_bond_indices=active_bond_indices, active_pi_indices=active_pi_indices,
+                                          stretch_mod=stretch_mod, bend_mod=bend_mod, tran_mod=tran_mod,
+                                          tolerance=tolerance)
     solve_result = solver.solve(params=solve_params, minimization_type=minimization_method,
                                 reusable_results=reusable_results)
 

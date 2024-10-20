@@ -78,7 +78,7 @@ def check_terminate_protocol(minimization_results: list[MinimizationResult]) -> 
     return all([modulus < Parameters.moduli_tolerance for modulus in moduli])
 
 
-def run_removal_protocol(lattice: AbstractLattice, output_handler: OutputHandler, rng: np.random.Generator):
+def run_removal_protocol(lattice: AbstractLattice, output_handler: OutputHandler):
     """
     Assigns each bond a random number s_i in (0, 1) and increases p: when p > s_i, we add the bond i
     """
@@ -168,7 +168,7 @@ def main():
 
     # Run the appropriate protocol
     basin.assign_bond_seeds(lattice=lattice, rng=rng)  # assign a random number/key to each bond
-    run_removal_protocol(lattice=lattice, output_handler=output_handler, rng=rng)
+    run_removal_protocol(lattice=lattice, output_handler=output_handler)
 
 
 if __name__ == "__main__":

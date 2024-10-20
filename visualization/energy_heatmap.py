@@ -5,7 +5,7 @@ Currently deprecated in favor for use of energy_density.py
 import matplotlib.pyplot as plt
 import energyminimization.matrix_helper as pos
 import energyminimization.energies.stretch_linear as stretch
-import energyminimization.energies.bend as bend
+import energyminimization.energies.bend_linear as bend
 import energyminimization.energies.transverse as tran
 import numpy as np
 import scipy.interpolate
