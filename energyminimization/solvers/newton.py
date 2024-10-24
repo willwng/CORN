@@ -92,11 +92,12 @@ def compute_tau(z, d, trust_radius):
     a = np.dot(d, d)
     b = 2 * np.dot(z, d)
     c = np.dot(z, z) - trust_radius ** 2
+
     sqrt_discriminant = np.sqrt(b * b - 4 * a * c)
     aux = b + np.copysign(sqrt_discriminant, b)
     ta = -aux / (2 * a)
     tb = -2 * c / aux
-    return ta, tb
+    return sorted([ta, tb])
 
 
 def tr_predict(f0, p, g, A):
@@ -108,7 +109,7 @@ def tr_predict(f0, p, g, A):
 
 def tr_solve(f0, x, g, A, max_iter, tol, trust_radius):
     """
-    Inner loop for Newton-CG, with trust region constraint
+    Use conjugate gradient to solve for the search direction p in the trust region.
     """
     # Check if we are already at a minimum
     z0 = np.zeros_like(x)
@@ -116,12 +117,9 @@ def tr_solve(f0, x, g, A, max_iter, tol, trust_radius):
         return z0, 0
 
     # Initialize
-    z = z0.copy()
+    z = z0
     r = g.copy()
     d = -r
-
-    rs = np.dot(r, r)
-    rs_old = rs
 
     # Iterate to solve for the search direction
     for j in range(max_iter):
@@ -137,76 +135,77 @@ def tr_solve(f0, x, g, A, max_iter, tol, trust_radius):
             else:
                 return pb, 1
 
-        alpha = rs_old / dAd
+        r_squared = np.dot(r, r)
+        alpha = r_squared / dAd
         z_new = z + alpha * d
         # Move back to the boundary of the trust region
-        if np.linalg.norm(z) >= trust_radius:
+        if np.linalg.norm(z_new) >= trust_radius:
             # We require tau >= 0
             _, tau = compute_tau(z, d, trust_radius)
             p = z + tau * d
             return p, 1
 
         # Update residual, check for convergence
-        r += alpha * Ad
-        rs_new = np.dot(r, r)
-        if np.sqrt(rs_new) < tol:
+        r_new = r + alpha * Ad
+        r_squared_new = np.dot(r_new, r_new)
+        if np.sqrt(r_squared_new) < tol:
             return z_new, 0
+        beta = r_squared_new / r_squared
+        d_new = -r_new + beta * d
 
-        beta = rs_new / rs_old
-        d = -r + beta * d
-        rs_old = rs_new
         z = z_new
+        r = r_new
+        d = d_new
+
     else:
         return z, 2
 
 
 def trust_region_newton_cg(fun, x0, jac, hess, g_tol=1e-8):
     # --- Initialize trust-region ---
-    trust_radius = 10.0
-    max_trust_radius = 1e3
+    trust_radius = 1.0
+    max_trust_radius = 1000.0
     eta = 0.15
 
-    x = x0.copy()
     max_iter = len(x0) * 100
     cg_max_iter = len(x0) * 200
 
+    x = x0.copy()
     f_old = fun(x)
 
     for k in range(max_iter):
-        g, A = jac(x), hess(x)
+        g = jac(x)
         g_mag = np.linalg.norm(g)
         # Termination condition
         if g_mag < g_tol:
             return x, 0
 
-        # Solve the trust-region sub-problem
+        # Try an initial step and trusting it (conjugate gradient to solve the subproblem)
+        A = hess(x)
         cg_tol = min(0.5, np.sqrt(g_mag)) * g_mag
-        p, bound = tr_solve(f0=f_old, x=x, g=g, A=A, max_iter=cg_max_iter, tol=cg_tol,
+        p, hit_constraint = tr_solve(f0=f_old, x=x, g=g, A=A, max_iter=cg_max_iter, tol=cg_tol,
                             trust_radius=trust_radius)
         # Did not find a valid step
-        if bound == 2:
+        if hit_constraint == 2:
             return x, 2
-        x_prop = x + p
-        f_prop = fun(x_prop)
+        x_new = x + p
+        f_new = fun(x_new)
 
         # Actual reduction and predicted reduction
-        df = f_old - f_prop
+        df = f_old - f_new
+        # Predicted reduction by the quadratic model
         df_pred = -(np.dot(g, p) + 0.5 * np.dot(p, A.dot(p)))
 
-        # Predicted reduction is not positive
-        # if df_pred <= 0:
-        #     return x, 1
-
-        # Updating trust region radius based on gain ratio
+        # Updating trust region radius
         rho = df / df_pred
         if rho < 0.25:  # poor prediction, reduce trust radius
             trust_radius *= 0.25
-        elif rho > 0.75 and bound:  # good step and on the boundary
+        elif rho > 0.75 and hit_constraint:  # good step and on the boundary
             trust_radius = min(2 * trust_radius, max_trust_radius)
 
         # Accept step
         if rho > eta:
-            x = x_prop
-            f_old = f_prop
+            x = x_new
+            f_old = f_new
 
     return x, 1
