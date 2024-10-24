@@ -209,7 +209,7 @@ def nonlinear_solve(params: SolveParameters):
 
     # We use the trust region Newton-CG method to solve the nonlinear problem
     final_pos, info = trust_region_newton_cg(x0=x0, fun=compute_total_energy, jac=compute_total_gradient,
-                                             hess=compute_total_hessian, g_tol=1e-5)
+                                             hess=compute_total_hessian, g_tol=1e-6)
 
     final_pos = final_pos.reshape((-1, 2))
     final_energy = compute_total_energy(pos_matrix=final_pos)
