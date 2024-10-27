@@ -118,7 +118,7 @@ def tr_solve(f0, x, g, A, max_iter, tol, trust_radius):
 
     # Initialize
     z = z0
-    r = g.copy()
+    r = g
     d = -r
 
     # Iterate to solve for the search direction
@@ -127,6 +127,7 @@ def tr_solve(f0, x, g, A, max_iter, tol, trust_radius):
         dAd = np.dot(d, Ad)
         # Direction of non-positive curvature
         if dAd <= 0:
+            # Compute the two points that intersect the trust region boundary
             ta, tb = compute_tau(z, d, trust_radius)
             pa, pb = z + ta * d, z + tb * d
             # Choose the direction with the lowest predicted objective function value
@@ -135,26 +136,27 @@ def tr_solve(f0, x, g, A, max_iter, tol, trust_radius):
             else:
                 return pb, 1
 
+        # Otherwise, continue with the conjugate gradient
         r_squared = np.dot(r, r)
         alpha = r_squared / dAd
-        z_new = z + alpha * d
+        z_next = z + alpha * d
         # Move back to the boundary of the trust region
-        if np.linalg.norm(z_new) >= trust_radius:
-            # We require tau >= 0
+        if np.linalg.norm(z_next) >= trust_radius:
+            # We require tau >= 0, take the positive root
             _, tau = compute_tau(z, d, trust_radius)
             p = z + tau * d
             return p, 1
 
         # Update residual, check for convergence
-        r_new = r + alpha * Ad
-        r_squared_new = np.dot(r_new, r_new)
-        if np.sqrt(r_squared_new) < tol:
-            return z_new, 0
-        beta = r_squared_new / r_squared
-        d_new = -r_new + beta * d
+        r_next = r + alpha * Ad
+        r_next_squared = np.dot(r_next, r_next)
+        if np.sqrt(r_next_squared) < tol:
+            return z_next, 0
+        beta = r_next_squared / r_squared
+        d_new = -r_next + beta * d
 
-        z = z_new
-        r = r_new
+        z = z_next
+        r = r_next
         d = d_new
 
     else:
@@ -167,10 +169,11 @@ def trust_region_newton_cg(fun, x0, jac, hess, g_tol=1e-8):
     max_trust_radius = 1000.0
     eta = 0.15
 
+    # Max iterations for outer loop and then inner conjugate gradient loop
     max_iter = len(x0) * 100
     cg_max_iter = len(x0) * 200
 
-    x = x0.copy()
+    x = x0
     f_old = fun(x)
 
     for k in range(max_iter):
@@ -180,13 +183,13 @@ def trust_region_newton_cg(fun, x0, jac, hess, g_tol=1e-8):
         if g_mag < g_tol:
             return x, 0
 
-        # Try an initial step and trusting it (conjugate gradient to solve the subproblem)
+        # Try an initial step and trusting it (conjugate gradient to solve the sub-problem)
         A = hess(x)
         cg_tol = min(0.5, np.sqrt(g_mag)) * g_mag
-        p, hit_constraint = tr_solve(f0=f_old, x=x, g=g, A=A, max_iter=cg_max_iter, tol=cg_tol,
-                            trust_radius=trust_radius)
+        p, hit_boundary = tr_solve(f0=f_old, x=x, g=g, A=A, max_iter=cg_max_iter, tol=cg_tol,
+                                   trust_radius=trust_radius)
         # Did not find a valid step
-        if hit_constraint == 2:
+        if hit_boundary == 2:
             return x, 2
         x_new = x + p
         f_new = fun(x_new)
@@ -194,13 +197,13 @@ def trust_region_newton_cg(fun, x0, jac, hess, g_tol=1e-8):
         # Actual reduction and predicted reduction
         df = f_old - f_new
         # Predicted reduction by the quadratic model
-        df_pred = -(np.dot(g, p) + 0.5 * np.dot(p, A.dot(p)))
+        df_pred = f_old - tr_predict(f_old, p, g, A)
 
         # Updating trust region radius
         rho = df / df_pred
         if rho < 0.25:  # poor prediction, reduce trust radius
             trust_radius *= 0.25
-        elif rho > 0.75 and hit_constraint:  # good step and on the boundary
+        elif rho > 0.75 and hit_boundary:  # good step and on the boundary, can increase radius
             trust_radius = min(2 * trust_radius, max_trust_radius)
 
         # Accept step

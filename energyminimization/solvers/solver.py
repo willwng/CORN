@@ -1,3 +1,4 @@
+from enum import Enum
 from typing import List, Optional
 
 import numpy as np
@@ -9,11 +10,15 @@ import energyminimization.energies.bend_full as bnl
 import energyminimization.matrix_helper as pos
 from energyminimization.matrix_helper import KMatrixResult
 from energyminimization.solvers.conjugate_gradient import conjugate_gradient
+from energyminimization.solvers.fire import optimize_fire
 from energyminimization.solvers.minimization_type import MinimizationType
 from energyminimization.solvers.newton import trust_region_newton_cg
 from energyminimization.transformations import Strain
 from lattice.abstract_lattice import AbstractLattice
 
+class NonLinearSolvers(Enum):
+    TRUST_NEWTON_CG = 0
+    FIRE = 1
 
 @dataclass
 class ReusableResults:
@@ -148,7 +153,7 @@ def linear_solve(params: SolveParameters, reusable_results: Optional[ReusableRes
                        final_energy=final_energy, info=str(info), reusable_results=reusable_results)
 
 
-def nonlinear_solve(params: SolveParameters):
+def nonlinear_solve(params: SolveParameters, nonlinear_solver: NonLinearSolvers):
     """
     Solves the minimization problem with linearized energy by solving up a linear system and solving
      with conjugate gradient method (optionally GPU-accelerated and/or preconditioned)
@@ -207,9 +212,13 @@ def nonlinear_solve(params: SolveParameters):
     else:
         x0 = params.strained_pos.ravel()
 
-    # We use the trust region Newton-CG method to solve the nonlinear problem
-    final_pos, info = trust_region_newton_cg(x0=x0, fun=compute_total_energy, jac=compute_total_gradient,
-                                             hess=compute_total_hessian, g_tol=1e-6)
+    if nonlinear_solver == NonLinearSolvers.TRUST_NEWTON_CG:
+        # We use the trust region Newton-CG method to solve the nonlinear problem
+        final_pos, info = trust_region_newton_cg(x0=x0, fun=compute_total_energy, jac=compute_total_gradient,
+                                                 hess=compute_total_hessian, g_tol=1e-6)
+    else:
+        # Use the FIRE method
+        final_pos, info = optimize_fire(x0=x0, df=compute_total_gradient, atol=1e-6)
 
     final_pos = final_pos.reshape((-1, 2))
     final_energy = compute_total_energy(pos_matrix=final_pos)
@@ -223,7 +232,9 @@ def solve(params: SolveParameters, minimization_type: MinimizationType,
     """ Find the relaxed, minimal energy state of the network """
     if minimization_type == MinimizationType.LINEAR:
         return linear_solve(params=params, reusable_results=reusable_results)
-    if minimization_type == MinimizationType.NONLINEAR:
-        return nonlinear_solve(params=params)
+    elif minimization_type == MinimizationType.NONLINEAR:
+        return nonlinear_solve(params=params, nonlinear_solver = NonLinearSolvers.TRUST_NEWTON_CG)
+    elif minimization_type == MinimizationType.FIRE:
+        return nonlinear_solve(params=params, nonlinear_solver = NonLinearSolvers.FIRE)
     else:
         raise ValueError(f"Unknown minimization type: {minimization_type}")

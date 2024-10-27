@@ -13,3 +13,4 @@ from enum import Enum
 class MinimizationType(Enum):
     LINEAR = 0
     NONLINEAR = 1
+    FIRE = 2
