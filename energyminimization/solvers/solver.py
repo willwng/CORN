@@ -221,9 +221,9 @@ def nonlinear_solve(params: SolveParameters, nonlinear_solver: NonLinearSolvers)
                                                  hess=compute_total_hessian, g_tol=1e-6)
     # FIRE methods
     elif nonlinear_solver == NonLinearSolvers.FIRE:
-        final_pos, info = optimize_fire(x0=x0, df=compute_total_gradient, atol=1e-8)
+        final_pos, info = optimize_fire(x0=x0, df=compute_total_gradient, atol=params.tolerance)
     elif nonlinear_solver == NonLinearSolvers.FIRE2:
-        final_pos, info = optimize_fire2(x0=x0, df=compute_total_gradient, atol=1e-8)
+        final_pos, info = optimize_fire2(x0=x0, df=compute_total_gradient, atol=params.tolerance)
     else:
         raise ValueError(f"Unknown nonlinear solver: {nonlinear_solver}")
 
