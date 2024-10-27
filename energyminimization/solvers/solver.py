@@ -3,6 +3,8 @@ from typing import List, Optional
 
 import numpy as np
 from dataclasses import dataclass
+
+import scipy.optimize
 from scipy.sparse import spmatrix, csr_matrix
 
 import energyminimization.energies.stretch_full as snl
@@ -15,12 +17,6 @@ from energyminimization.solvers.minimization_type import MinimizationType
 from energyminimization.solvers.newton import trust_region_newton_cg
 from energyminimization.transformations import Strain
 from lattice.abstract_lattice import AbstractLattice
-
-
-class NonLinearSolvers(Enum):
-    TRUST_NEWTON_CG = 0
-    FIRE = 1
-    FIRE2 = 2
 
 
 @dataclass
@@ -156,7 +152,7 @@ def linear_solve(params: SolveParameters, reusable_results: Optional[ReusableRes
                        final_energy=final_energy, info=str(info), reusable_results=reusable_results)
 
 
-def nonlinear_solve(params: SolveParameters, nonlinear_solver: NonLinearSolvers):
+def nonlinear_solve(params: SolveParameters, minimization_type: MinimizationType):
     """
     Solves the minimization problem with linearized energy by solving up a linear system and solving
      with conjugate gradient method (optionally GPU-accelerated and/or preconditioned)
@@ -215,14 +211,19 @@ def nonlinear_solve(params: SolveParameters, nonlinear_solver: NonLinearSolvers)
     else:
         x0 = params.strained_pos.ravel()
 
-    if nonlinear_solver == NonLinearSolvers.TRUST_NEWTON_CG:
+    if minimization_type == MinimizationType.TRUST_NEWTON_CG:
         # We use the trust region Newton-CG method to solve the nonlinear problem
         final_pos, info = trust_region_newton_cg(x0=x0, fun=compute_total_energy, jac=compute_total_gradient,
                                                  hess=compute_total_hessian, g_tol=1e-6)
+    elif minimization_type == MinimizationType.TRUST_CONSTR:
+        res = scipy.optimize.minimize(fun=compute_total_energy, x0=x0, jac=compute_total_gradient,
+                                      hess=compute_total_hessian, method='trust-constr', options={'gtol': 1e-6})
+        final_pos = res.x
+        info = int(res.status != 1 and res.status != 2) # 1 or 2 implies success
     # FIRE methods
-    elif nonlinear_solver == NonLinearSolvers.FIRE:
+    elif minimization_type == MinimizationType.FIRE:
         final_pos, info = optimize_fire(x0=x0, df=compute_total_gradient, atol=params.tolerance)
-    elif nonlinear_solver == NonLinearSolvers.FIRE2:
+    elif minimization_type == MinimizationType.FIRE2:
         final_pos, info = optimize_fire2(x0=x0, df=compute_total_gradient, atol=params.tolerance)
     else:
         raise ValueError(f"Unknown nonlinear solver: {nonlinear_solver}")
@@ -239,11 +240,5 @@ def solve(params: SolveParameters, minimization_type: MinimizationType,
     """ Find the relaxed, minimal energy state of the network """
     if minimization_type == MinimizationType.LINEAR:
         return linear_solve(params=params, reusable_results=reusable_results)
-    elif minimization_type == MinimizationType.NONLINEAR:
-        return nonlinear_solve(params=params, nonlinear_solver=NonLinearSolvers.TRUST_NEWTON_CG)
-    elif minimization_type == MinimizationType.FIRE:
-        return nonlinear_solve(params=params, nonlinear_solver=NonLinearSolvers.FIRE)
-    elif minimization_type == MinimizationType.FIRE2:
-        return nonlinear_solve(params=params, nonlinear_solver=NonLinearSolvers.FIRE2)
     else:
-        raise ValueError(f"Unknown minimization type: {minimization_type}")
+        return nonlinear_solve(params=params, minimization_type=minimization_type)

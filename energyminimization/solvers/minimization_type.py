@@ -12,6 +12,7 @@ from enum import Enum
 
 class MinimizationType(Enum):
     LINEAR = 0
-    NONLINEAR = 1
-    FIRE = 2
-    FIRE2 = 3 # Fire2 is based on https://doi.org/10.1016/j.commatsci.2020.109584
+    TRUST_NEWTON_CG = 1
+    TRUST_CONSTR = 2
+    FIRE = 3
+    FIRE2 = 4 # Fire2 is based on https://doi.org/10.1016/j.commatsci.2020.109584
