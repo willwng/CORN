@@ -14,3 +14,4 @@ class MinimizationType(Enum):
     LINEAR = 0
     NONLINEAR = 1
     FIRE = 2
+    FIRE2 = 3 # Fire2 is based on https://doi.org/10.1016/j.commatsci.2020.109584

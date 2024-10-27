@@ -53,3 +53,50 @@ def optimize_fire(x0: np.ndarray, df: Callable[[np.ndarray], np.ndarray], atol: 
             return x, 0
 
     return x, 1
+
+
+
+def optimize_fire2(x0: np.ndarray, df: Callable[[np.ndarray], np.ndarray], atol: float = 1e-8):
+    # Initialize parameters
+    alpha0 = 0.1
+    n_delay = 5
+    f_inc = 1.1
+    f_dec = 0.5
+    fa = 0.99
+    n_neg_max = 2000
+    dt = 0.002
+    dt_max = 10 * dt
+    dt_min = 0.02 * dt
+    alpha = alpha0
+    n_pos = 0
+    n_neg = 0
+
+    x = x0.copy()
+    velocity = np.zeros_like(x)
+    force = -df(x)
+
+    max_iter = x.size * 100
+    sqrt_dof = np.sqrt(x.size)
+
+    for _ in range(max_iter):
+        power = np.dot(force, velocity)
+        if power > 0:
+            n_pos += 1
+            n_neg = 0
+            if n_pos > n_delay:
+                dt = min(dt * f_inc, dt_max)
+                alpha *= fa
+        else:
+            n_pos = 0
+            n_neg += 1
+            if n_neg > n_neg_max:
+                return x, 2
+            dt = max(dt * f_dec, dt_min)
+            alpha = alpha0
+            velocity = np.zeros_like(x)
+
+        x, velocity, force = md_integrate(v=velocity, x=x, force=force, df=df, alpha=alpha, dt=dt)
+        if (np.linalg.norm(force) / sqrt_dof) < atol:
+            return x, 0
+
+    return x, 1

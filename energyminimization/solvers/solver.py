@@ -10,15 +10,18 @@ import energyminimization.energies.bend_full as bnl
 import energyminimization.matrix_helper as pos
 from energyminimization.matrix_helper import KMatrixResult
 from energyminimization.solvers.conjugate_gradient import conjugate_gradient
-from energyminimization.solvers.fire import optimize_fire
+from energyminimization.solvers.fire import optimize_fire, optimize_fire2
 from energyminimization.solvers.minimization_type import MinimizationType
 from energyminimization.solvers.newton import trust_region_newton_cg
 from energyminimization.transformations import Strain
 from lattice.abstract_lattice import AbstractLattice
 
+
 class NonLinearSolvers(Enum):
     TRUST_NEWTON_CG = 0
     FIRE = 1
+    FIRE2 = 2
+
 
 @dataclass
 class ReusableResults:
@@ -216,9 +219,13 @@ def nonlinear_solve(params: SolveParameters, nonlinear_solver: NonLinearSolvers)
         # We use the trust region Newton-CG method to solve the nonlinear problem
         final_pos, info = trust_region_newton_cg(x0=x0, fun=compute_total_energy, jac=compute_total_gradient,
                                                  hess=compute_total_hessian, g_tol=1e-6)
+    # FIRE methods
+    elif nonlinear_solver == NonLinearSolvers.FIRE:
+        final_pos, info = optimize_fire(x0=x0, df=compute_total_gradient, atol=1e-8)
+    elif nonlinear_solver == NonLinearSolvers.FIRE2:
+        final_pos, info = optimize_fire2(x0=x0, df=compute_total_gradient, atol=1e-8)
     else:
-        # Use the FIRE method
-        final_pos, info = optimize_fire(x0=x0, df=compute_total_gradient, atol=1e-6)
+        raise ValueError(f"Unknown nonlinear solver: {nonlinear_solver}")
 
     final_pos = final_pos.reshape((-1, 2))
     final_energy = compute_total_energy(pos_matrix=final_pos)
@@ -233,8 +240,10 @@ def solve(params: SolveParameters, minimization_type: MinimizationType,
     if minimization_type == MinimizationType.LINEAR:
         return linear_solve(params=params, reusable_results=reusable_results)
     elif minimization_type == MinimizationType.NONLINEAR:
-        return nonlinear_solve(params=params, nonlinear_solver = NonLinearSolvers.TRUST_NEWTON_CG)
+        return nonlinear_solve(params=params, nonlinear_solver=NonLinearSolvers.TRUST_NEWTON_CG)
     elif minimization_type == MinimizationType.FIRE:
-        return nonlinear_solve(params=params, nonlinear_solver = NonLinearSolvers.FIRE)
+        return nonlinear_solve(params=params, nonlinear_solver=NonLinearSolvers.FIRE)
+    elif minimization_type == MinimizationType.FIRE2:
+        return nonlinear_solve(params=params, nonlinear_solver=NonLinearSolvers.FIRE2)
     else:
         raise ValueError(f"Unknown minimization type: {minimization_type}")
