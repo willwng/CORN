@@ -211,15 +211,19 @@ def nonlinear_solve(params: SolveParameters, minimization_type: MinimizationType
     else:
         x0 = params.strained_pos.ravel()
 
+    message = ""
     if minimization_type == MinimizationType.TRUST_NEWTON_CG:
         # We use the trust region Newton-CG method to solve the nonlinear problem
         final_pos, info = trust_region_newton_cg(x0=x0, fun=compute_total_energy, jac=compute_total_gradient,
                                                  hess=compute_total_hessian, g_tol=1e-6)
     elif minimization_type == MinimizationType.TRUST_CONSTR:
+        max_iter = x0.size * 10
         res = scipy.optimize.minimize(fun=compute_total_energy, x0=x0, jac=compute_total_gradient,
-                                      hess=compute_total_hessian, method='trust-constr', options={'gtol': 1e-6})
+                                      hess=compute_total_hessian, method='trust-constr',
+                                      options={'gtol': 1e-6, 'maxiter': max_iter})
         final_pos = res.x
         info = int(res.status != 1 and res.status != 2) # 1 or 2 implies success
+        message = res.message
     # FIRE methods
     elif minimization_type == MinimizationType.FIRE:
         final_pos, info = optimize_fire(x0=x0, df=compute_total_gradient, atol=params.tolerance)
@@ -227,6 +231,11 @@ def nonlinear_solve(params: SolveParameters, minimization_type: MinimizationType
         final_pos, info = optimize_fire2(x0=x0, df=compute_total_gradient, atol=params.tolerance)
     else:
         raise ValueError(f"Unknown nonlinear solver: {minimization_type}")
+
+    if info != 0:
+        print(f"Nonlinear solver did not converge: {info}")
+        print(f"Message: {message}")
+        exit(1)
 
     final_pos = final_pos.reshape((-1, 2))
     final_energy = compute_total_energy(pos_matrix=final_pos)
