@@ -226,7 +226,7 @@ def nonlinear_solve(params: SolveParameters, minimization_type: MinimizationType
     elif minimization_type == MinimizationType.FIRE2:
         final_pos, info = optimize_fire2(x0=x0, df=compute_total_gradient, atol=params.tolerance)
     else:
-        raise ValueError(f"Unknown nonlinear solver: {nonlinear_solver}")
+        raise ValueError(f"Unknown nonlinear solver: {minimization_type}")
 
     final_pos = final_pos.reshape((-1, 2))
     final_energy = compute_total_energy(pos_matrix=final_pos)
