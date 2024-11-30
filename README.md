@@ -9,7 +9,7 @@ See [requirements.txt](requirements.txt)
 
 These can be installed with `pip install -r requirements.txt.`
 
-An older, but optimized version of the code can be found in the `optimized` branch, but this requires significantly more libraries
+An older, but optimized (including GPU-accelerated) version of the code can be found in the `optimized` branch, but this requires installation of additional libraries
 
 ## Running CORN
 
