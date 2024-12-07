@@ -7,4 +7,5 @@ from enum import Enum
 class LatticeType(Enum):
     KAGOME = 1
     TRIANGULAR = 2
-    SQUARE = 3
+    DOUBLE_TRIANGULAR = 3
+    SQUARE = 4

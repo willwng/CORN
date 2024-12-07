@@ -16,6 +16,7 @@ from lattice.abstract_lattice import AbstractLattice
 from lattice.generic_lattice import make_generic
 from lattice.lattice_factory import LatticeFactory
 from parameters import Parameters
+from protocol_types import Protocol
 from result_handling.output_handler import OutputHandler, VisualizationHandler
 from visualization.visualize_lattice import Visualizer
 
@@ -35,18 +36,13 @@ def initialize_lattice(rng: np.random.Generator) -> AbstractLattice:
     if Parameters.is_generic:
         make_generic(lattice=lattice, rng=rng, d_shift=Parameters.d_shift)
 
-    # Slight hacky-fix. Remove bonds with double "imaginary positions" (i.e. bonds that are both periodic in x and y)
-    imag_x = set([bond.get_node1() for bond in lattice.bonds if bond.is_hor_pbc()])
-    imag_y = set([bond.get_node1() for bond in lattice.bonds if bond.is_top_pbc()])
-    for bond in [bond for bond in lattice.get_bonds() if bond.is_hor_pbc() or bond.is_top_pbc()]:
-        node_1, node_2 = bond.get_node1(), bond.get_node2()
-        if node_1 in (imag_y.difference(imag_x)) and node_2 in imag_x:
-            print(f"Removed double imaginary bond: {bond.get_node1().get_id()}, {bond.get_node2().get_id()}")
-            lattice.drop_bond(bond)
-        if node_1 in (imag_y.intersection(imag_x)) and node_2 not in (imag_y.union(imag_x)) and node_2.get_id() != 0:
-            print(f"Removed double imaginary bond: {bond.get_node1().get_id()}, {bond.get_node2().get_id()}")
-            lattice.drop_bond(bond)
+    # Patches any potential issues with periodic boundary conditions
+    lattice.patch_pbc()
 
+    # Set the mechanical properties
+    lattice.set_stretch_mod(Parameters.stretch_mod, Parameters.stretch_mod2)
+    lattice.set_bend_mod(Parameters.bend_mod, Parameters.bend_mod2)
+    lattice.set_tran_mod(Parameters.tran_mod, Parameters.tran_mod2)
     return lattice
 
 
@@ -82,29 +78,32 @@ def run_strain_sweep_protocol(lattice: AbstractLattice, output_handler: OutputHa
 
     # Set the number of bonds in the lattice to p * total_bonds
     r = Parameters.r_strength
-    p = min((1 / 3) + (2 / (3 * r)), Parameters.prob_fill_high)
-    basin.set_bonds_basin(lattice=lattice, p=p, r=r, target_direction=Parameters.target_direction)
+    p = min((1 / 3) + (2 / (3 * r)), Parameters.prob_fill_high)  # max allowable by r, or user-set value
+    p2 = min((1 / 3) + (2 / (3 * r)), Parameters.prob_fill_high2)
+    if type(lattice).__name__ == "DoubleTriangularLattice":
+        # For the double network, set the bonds individually
+        basin.set_bonds_basin(lattice=lattice.network1, p=p, r=r, target_direction=Parameters.target_direction)
+        basin.set_bonds_basin(lattice=lattice.network2, p=p2, r=r, target_direction=Parameters.target_direction)
+    else:
+        basin.set_bonds_basin(lattice=lattice, p=p, r=r, target_direction=Parameters.target_direction)
     lattice.update_active_bonds()
 
     # All types of strains, initial guesses for each one
     strains = Parameters.strains
     init_guesses = [None] * len(strains)
 
-    gammas = np.logspace(-3, 1, 30)
-    for gamma in gammas:
+    # Sweep through all strain amounts
+    for gamma in Parameters.gammas:
         # Run minimization
         reusable_results = None
         # --- Compute the response to each strain ---
         minimization_results = []
         for i, strain in enumerate(strains):
             strain.update_gamma(gamma)
-            print(f" Performing strain: {strain.name} with magnitude {strain.gamma} --")
+            print(f"-- Performing strain: {strain.name} with magnitude {strain.gamma} --")
             sheared_pos = strain.apply(pos_matrix=init_pos)
             minimization_result = em.minimize(
                 lattice=lattice,
-                stretch_mod=Parameters.stretch_mod,
-                bend_mod=Parameters.bend_mod,
-                tran_mod=Parameters.tran_mod,
                 sheared_pos=sheared_pos,
                 strain=strain,
                 init_guess=init_guesses[i],
@@ -117,11 +116,6 @@ def run_strain_sweep_protocol(lattice: AbstractLattice, output_handler: OutputHa
             reusable_results = minimization_result.reusable_results
             # Initial guess for the next minimization with this strain
             init_guesses[i] = minimization_result.final_pos
-            print(f" > {minimization_result.info}")
-            print(f" > Time used: {(minimization_result.time_used)} s")
-
-            # Print and append to arrays if using slope method
-            print(f" > Initial E: {minimization_result.init_energy}, Final E: {minimization_result.final_energy}")
 
         update_output_file(lattice=lattice, minimization_results=minimization_results, output_handler=output_handler,
                            bond_occupation=gamma)
@@ -167,12 +161,10 @@ def run_removal_protocol(lattice: AbstractLattice, output_handler: OutputHandler
         # --- Compute the response to each strain ---
         minimization_results = []
         for i, strain in enumerate(strains):
+            print(f" Performing strain: {strain.name} --")
             sheared_pos = strain.apply(pos_matrix=init_pos)
             minimization_result = em.minimize(
                 lattice=lattice,
-                stretch_mod=Parameters.stretch_mod,
-                bend_mod=Parameters.bend_mod,
-                tran_mod=Parameters.tran_mod,
                 sheared_pos=sheared_pos,
                 strain=strain,
                 init_guess=init_guesses[i],
@@ -185,12 +177,6 @@ def run_removal_protocol(lattice: AbstractLattice, output_handler: OutputHandler
             reusable_results = minimization_result.reusable_results
             # Initial guess for the next minimization with this strain
             init_guesses[i] = minimization_result.final_pos
-            print(f" Performing strain: {strain.name} --")
-            print(f" > {minimization_result.info}")
-            print(f" > Time used: {np.format_float_scientific(minimization_result.time_used)} s")
-
-            # Print and append to arrays if using slope method
-            print(f" > Initial E: {minimization_result.init_energy}, Final E: {minimization_result.final_energy}")
 
         update_output_file(lattice=lattice, minimization_results=minimization_results, output_handler=output_handler,
                            bond_occupation=p)
@@ -215,10 +201,15 @@ def main():
 
     # Initialize the lattice object
     lattice = initialize_lattice(rng=rng)
+    basin.assign_bond_seeds(lattice=lattice, rng=rng)  # assign a random number/key to each bond
 
     # Run the appropriate protocol
-    basin.assign_bond_seeds(lattice=lattice, rng=rng)  # assign a random number/key to each bond
-    run_strain_sweep_protocol(lattice=lattice, output_handler=output_handler)
+    if Parameters.protocol == Protocol.BOND_REMOVAL:
+        run_removal_protocol(lattice=lattice, output_handler=output_handler)
+    elif Parameters.protocol == Protocol.STRAIN_SWEEP:
+        run_strain_sweep_protocol(lattice=lattice, output_handler=output_handler)
+    else:
+        raise ValueError(f"Invalid protocol: {Parameters.protocol}")
 
 
 if __name__ == "__main__":

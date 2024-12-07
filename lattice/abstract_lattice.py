@@ -5,7 +5,7 @@ The positions of each node is not changed - the lattice represents
 the initial lattice
 """
 from random import shuffle
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 
 import numpy as np
 import scipy.spatial as spatial
@@ -21,6 +21,9 @@ class AbstractLattice:
     height: float = 0.0
     name: str = ""  # Name of lattice (Kagome, Triangular, Square)
 
+    # Amount of spacing between each row of nodes, depends on lattice (should override)
+    height_increment: float = 1.0
+
     # ALl the node, bond, and pi-bond instances
     nodes: List[Node] = []
     bonds: List[Bond] = []
@@ -31,12 +34,6 @@ class AbstractLattice:
     boundary_bonds: List[Bond] = []
     active_pi_bonds: List[PiBond] = []
 
-    # Default max number of neighbors for bonds, depends on lattice
-    # (used for correlated networks)
-    max_neighbors: int = 6
-    # Default spacing between each row of nodes, depends on lattice
-    # (used for correlated networks)
-    height_increment: int = 1
     # Used as a lookup for node -> bonds to speed up pi-bond generation
     node_bonds_dic: Dict[Node, List[Bond]] = {}
 
@@ -67,9 +64,6 @@ class AbstractLattice:
 
     def get_active_pi_bonds(self) -> List[PiBond]:
         return self.active_pi_bonds
-
-    def drop_pi_bonds(self) -> None:
-        self.pi_bonds = []
 
     def get_name(self) -> str:
         return self.name
@@ -138,6 +132,12 @@ class AbstractLattice:
         self.add_node_bonds_dic(node_1, bond)
         self.add_node_bonds_dic(node_2, bond)
         return bond
+
+    def generate_nodes(self) -> List[Node]:
+        """
+        Generates the nodes within the lattice
+        """
+        raise NotImplementedError("Subclasses must implement this method")
 
     def generate_bonds(self) -> None:
         """
@@ -227,6 +227,27 @@ class AbstractLattice:
         # Maintain class invariant
         self.update_active_bonds()
 
+    def set_stretch_mod(self, stretch_mod: float, stretch_mod2: Optional[float] = None) -> None:
+        """
+        Sets the stretching modulus for all bonds to [stretch_mod]
+        """
+        for bond in self.bonds:
+            bond.stretch_mod = stretch_mod
+
+    def set_bend_mod(self, bend_mod: float, bend_mod2: Optional[float] = None) -> None:
+        """
+        Sets the bending modulus for all pi-bonds to [bend_mod]
+        """
+        for pi_bond in self.pi_bonds:
+            pi_bond.set_bend_mod(bend_mod)
+
+    def set_tran_mod(self, tran_mod: float, tran_mod2: Optional[float] = None) -> None:
+        """
+        Sets the transverse modulus for all bonds to [tran_mod]
+        """
+        for bond in self.bonds:
+            bond.tran_mod = tran_mod
+
     def get_bond_occupation(self) -> Tuple[int, int]:
         """
         Returns a tuple, containing the number of active bonds
@@ -288,6 +309,23 @@ class AbstractLattice:
         self.update_active_bonds()
         return
 
+    def patch_pbc(self) -> None:
+        """
+        Patches the periodic boundary conditions for the lattice
+        Slight hacky-fix. Remove bonds with double "imaginary positions"
+            (i.e. bonds that are both periodic in x and y)
+        """
+        imag_x = set([bond.get_node1() for bond in self.bonds if bond.is_hor_pbc()])
+        imag_y = set([bond.get_node1() for bond in self.bonds if bond.is_top_pbc()])
+        for bond in [bond for bond in self.bonds if bond.is_hor_pbc() or bond.is_top_pbc()]:
+            node_1, node_2 = bond.get_node1(), bond.get_node2()
+            if node_1 in (imag_y.difference(imag_x)) and node_2 in imag_x:
+                self.drop_bond(bond)
+            if node_1 in (imag_y.intersection(imag_x)) and node_2 not in (
+                    imag_y.union(imag_x)) and node_2.get_id() != 0:
+                self.drop_bond(bond)
+        return
+
     def load_lattice(self, node_pos_data, node_data, bond_node_data, bond_data, pi_bond_data) -> None:
         """
         Loads a lattice from bond_dat (typically obtained through pickling get_bond_data())
@@ -312,15 +350,6 @@ class AbstractLattice:
             self.nodes.append(Node(x, y, i))
             self.length = int(max(self.length, x))
             self.height = max(self.length, y)
-        # Load the node data (boundary, edge, exists)
-        for i, (boundary, edge, exists) in enumerate(node_data):
-            node = self.nodes[i]
-            if boundary:
-                node.set_boundary()
-            if edge:
-                node.set_edge()
-            if exists:
-                node.add_bond()
         # Load the bonds by their incident node ids
         self.bonds = []
         for (n1_id, n2_id) in bond_node_data:

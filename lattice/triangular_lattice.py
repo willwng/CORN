@@ -50,7 +50,6 @@ class TriangularLattice(AbstractLattice):
         self.bonds = []
         self.pi_bonds = []
         self.name = "Triangular"
-        self.max_neighbors = 10
         self.height_increment = math.sqrt(3.0) / 2.0
         self.generate_nodes(length, height)
         self.generate_bonds()

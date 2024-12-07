@@ -38,7 +38,6 @@ class SquareLattice(AbstractLattice):
         self.bonds = []
         self.pi_bonds = []
         self.name = "Square"
-        self.max_neighbors = 6
         self.height_increment = 1
         self.generate_nodes(length, height)
         self.generate_bonds()

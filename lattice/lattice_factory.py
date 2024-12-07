@@ -10,6 +10,7 @@ from lattice.kagome_lattice import KagomeLattice
 from lattice.lattice_type import LatticeType
 from lattice.square_lattice import SquareLattice
 from lattice.triangular_lattice import TriangularLattice
+from lattice.double_lattice import DoubleTriangularLattice
 
 
 
@@ -25,12 +26,15 @@ class LatticeFactory:
             return KagomeLattice(length=length, height=height)
         elif lattice_type == LatticeType.TRIANGULAR:
             return TriangularLattice(length=length, height=height)
+        elif lattice_type == LatticeType.DOUBLE_TRIANGULAR:
+            return DoubleTriangularLattice(length=length, height=height)
         elif lattice_type == LatticeType.SQUARE:
             return SquareLattice(length=length, height=height)
         else:
             print(f"Invalid type of lattice: {lattice_type}")
             quit()
 
+    # Note: the following is not used / tested.It is preferable to reuse the same random seed
     @staticmethod
     def load_lattice(
             node_pos_data, node_data, bond_node_data, bond_data, pi_bond_data

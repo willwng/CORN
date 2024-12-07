@@ -12,20 +12,23 @@ import math
 
 class Bond(object):
     # Instance variables:
-    # n_1, n_2   The two nodes that this edge bonds
-    # present    Whether the bond is active
-    # hor_pbc    Whether the bond is a horizontal periodic boundary condition
-    # top_pbc    Whether the bond is a top periodic boundary condition
-    # corner     We need this for polarized triangular lattices
+    # n_1, n_2      The two nodes that this edge bonds
+    # stretch_mod   The stretch modulus of this bond
+    # present       Whether the bond is active
+    # hor_pbc       Whether the bond is a horizontal periodic boundary condition
+    # top_pbc       Whether the bond is a top periodic boundary condition
+    # direction     The direction of the bond (0 = horizontal, 1 = right, 2 = left)
+    # s_key         The key for sorting bonds
 
     # The use of slots should save on memory usage compared to a normal class object
-    __slots__ = ["n_1", "n_2", "present", "hor_pbc", "top_pbc", "corner", "direction", "s_key"]
+    __slots__ = ["n_1", "n_2", "stretch_mod", "tran_mod", "present", "hor_pbc", "top_pbc", "direction", "s_key"]
     n_1: Node
     n_2: Node
+    stretch_mod: float
+    tran_mod: float
     present: bool
     hor_pbc: bool
     top_pbc: bool
-    corner: bool
     direction: int
     s_key: float
 
@@ -36,15 +39,17 @@ class Bond(object):
         :param n_2: Second node
         :param is_present: Whether this bond exists
         """
+        assert n_1 != n_2
         self.n_1 = n_1
         self.n_2 = n_2
-        assert self.n_1 != self.n_2
         self.present = is_present
         self.hor_pbc = False
         self.top_pbc = False
-        self.corner = False
-        self.direction = -1
+        self.direction = -1  # not yet set
         self.s_key = 0
+
+    def get_nodes(self) -> Tuple[Node, Node]:
+        return self.n_1, self.n_2
 
     def set_inactive(self) -> None:
         """
@@ -82,12 +87,6 @@ class Bond(object):
         Returns whether this bond is a top-down periodic boundary condition
         """
         return self.top_pbc
-
-    def is_corner(self) -> bool:
-        return self.corner
-
-    def set_corner(self) -> None:
-        self.corner = True
 
     def set_hor_pbc(self) -> None:
         """

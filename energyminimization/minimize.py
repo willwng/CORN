@@ -1,6 +1,6 @@
 """
-minimize.py is used to get and minimize the energy of a lattice
-    minimize sets up the lattice into a system that the solvers can use
+This file is used to get and minimize the energy of a lattice.
+    Lattice objects are converted to data types suitable for the solver (i.e., contiguous arrays).
 """
 import time
 from typing import List, Optional
@@ -46,9 +46,6 @@ class MinimizationResult:
 
 def minimize(
         lattice: AbstractLattice,
-        stretch_mod: float,
-        bend_mod: float,
-        tran_mod: float,
         strain: Strain,
         sheared_pos: np.ndarray,
         init_guess: Optional[np.ndarray],
@@ -62,17 +59,9 @@ def minimize(
     energy minimization algorithm
 
     :param lattice: the lattice to be minimized
-    :type lattice: Instance of AbstractLattice class
-    :param stretch_mod: modulus of stretching (alpha)
-    :type stretch_mod: float
-    :param bend_mod: bending modulus (kappa)
-    :type bend_mod: float
-    :param tran_mod: modulus of transverse (mu)
-    :type tran_mod: float
     :param strain: strain applied to the lattice
     :param sheared_pos: position matrix containing the positions of each node
         after shearing
-    :type sheared_pos: Matrix containing 2n elements (x, y for each node)
     :param init_guess: initial position guess
     :param reusable_results: objects from previous minimization
     :param tolerance: norm(residual) <= max(tol*norm(b), atol)
@@ -101,7 +90,8 @@ def minimize(
             all_bond_indices[i][4] = -1
 
     # Same as all_bond_indices but only for active bonds
-    active_bond_indices = all_bond_indices[all_bond_indices[:, 4] != -1]
+    ind_active = all_bond_indices[:, 4] != -1
+    active_bond_indices = all_bond_indices[ind_active]
 
     # [vertex id, edge node 1 id, edge node 2 id, bond 1 id, bond 2 id, pi bond id, sign for r_matrix[bond id], horizontal PBC, top PBC]
     active_pi_bonds = lattice.get_active_pi_bonds()
@@ -122,9 +112,18 @@ def minimize(
         active_pi_indices[i][10] = pi_bond.get_bond2().is_hor_pbc()
         active_pi_indices[i][11] = pi_bond.get_bond2().is_top_pbc()
 
+
+    # Stack all the moduli
+    stretch_moduli = np.array([bond.stretch_mod for bond in lattice.get_bonds()], dtype=np.float64)
+    tran_moduli = np.array([bond.tran_mod for bond in lattice.get_bonds()], dtype=np.float64)
+    stretch_moduli = stretch_moduli[ind_active]
+    tran_moduli = tran_moduli[ind_active]
+    bend_moduli = np.array([pi_bond.bend_mod for pi_bond in active_pi_bonds], dtype=np.float64)
+
     # 2. Convert lattice positions to matrices
     # Initial position of nodes, initial unit vectors for bonds, initial energy
     init_pos = pos.create_pos_matrix(lattice)
+    # Correction matrix is only needed for linear solves
     correction_matrix = pos.create_correction_matrix(lattice=lattice, init_pos=init_pos,
                                                      strain=strain, all_bond_indices=all_bond_indices)
     r_matrix = pos.create_r_matrix(pos_vector=init_pos, active_bond_indices=active_bond_indices, lattice=lattice,
@@ -139,7 +138,7 @@ def minimize(
                                           init_guess=init_guess, r_matrix=r_matrix, correction_matrix=correction_matrix,
                                           length_matrix=length_matrix, angle_matrix=angle_matrix,
                                           active_bond_indices=active_bond_indices, active_pi_indices=active_pi_indices,
-                                          stretch_mod=stretch_mod, bend_mod=bend_mod, tran_mod=tran_mod,
+                                          stretch_mod=stretch_moduli, bend_mod=bend_moduli, tran_mod=tran_moduli,
                                           tolerance=tolerance)
     solve_result = solver.solve(params=solve_params, minimization_type=minimization_method,
                                 reusable_results=reusable_results)
@@ -156,6 +155,10 @@ def minimize(
     # backbone_result = get_backbone_result(lattice=lattice, stretch_mod=stretch_mod, final_pos=final_pos,
     #                                       r_matrix=r_matrix, active_bond_indices=active_bond_indices,
     #                                       tolerance=tolerance)
+
+    print(f" > Converged with code: {info}")
+    print(f" > Time used: {np.format_float_scientific(time.time() - start_time)} s")
+    print(f" > Initial E: {init_energy}, Final E: {final_energy}")
 
     return MinimizationResult(init_energy=init_energy,
                               final_energy=final_energy,

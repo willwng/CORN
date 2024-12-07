@@ -245,9 +245,9 @@ class KMatrixResult:
 def get_k_matrices(
         n: int,
         r_matrix: np.ndarray,
-        stretch_mod: float,
-        bend_mod: float,
-        tran_mod: float,
+        stretch_mod: np.ndarray,
+        bend_mod: np.ndarray,
+        tran_mod: np.ndarray,
         active_bond_indices: np.ndarray,
         active_pi_indices: np.ndarray
 ) -> KMatrixResult:
@@ -255,13 +255,14 @@ def get_k_matrices(
     Returns the K matrices (hessians) for the energy minimization
     """
     k_stretch, k_bend, k_transverse = None, None, None
-    if stretch_mod != 0:
+    if np.max(stretch_mod) > 0:
         k_stretch = get_stretch_hessian(n=n, r_matrix=r_matrix, stretch_mod=stretch_mod,
                                         active_bond_indices=active_bond_indices)
-    if bend_mod != 0:
+
+    if np.max(bend_mod) > 0:
         k_bend = get_bend_hessian(n=n, r_matrix=r_matrix, bend_mod=bend_mod, active_pi_indices=active_pi_indices)
 
-    if tran_mod != 0:
-        k_transverse = get_transverse_hessian(n=n, r_matrix=r_matrix, tran_mod=bend_mod,
-                                              active_bond_indices=active_bond_indices)
+    if np.max(tran_mod) > 0:
+        k_transverse = get_transverse_hessian(n=n, r_matrix=r_matrix, tran_mod=tran_mod,
+                                                  active_bond_indices=active_bond_indices)
     return KMatrixResult(k_stretch=k_stretch, k_bend=k_bend, k_transverse=k_transverse)

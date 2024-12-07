@@ -52,7 +52,7 @@ def add_entry(rows, cols, data, i, r, c, v):
 
 
 def get_bend_hessian(
-        bend_mod: float,
+        bend_mod: np.ndarray,
         pos_matrix: np.ndarray,
         corrections: np.ndarray,
         active_pi_indices: np.ndarray,
@@ -224,7 +224,7 @@ def get_bend_hessian(
 
 
 def get_bend_jacobian(
-        bend_mod: float,
+        bend_mod: np.ndarray,
         pos_matrix: np.ndarray,
         corrections: np.ndarray,
         active_pi_indices: np.ndarray,
@@ -234,15 +234,15 @@ def get_bend_jacobian(
     theta, diff_theta, c_ji, c_jk = compute_angles(pos_matrix=pos_matrix, corrections=corrections,
                                                    active_pi_indices=active_pi_indices, orig_pi_angles=orig_pi_angles)
     # Gradient is equal to kappa * (theta - theta_0) * d_theta/d_dof
-    grad_factor = (bend_mod * diff_theta)[: , np.newaxis]
+    grad_factor = np.multiply(bend_mod, diff_theta)[: , np.newaxis]
     # Temporary variables useful for the gradient
     length_ji = np.linalg.norm(c_ji, axis=1)
     length_jk = np.linalg.norm(c_jk, axis=1)
     t_ji = np.divide(c_ji, np.square(length_ji)[:, np.newaxis])
     t_jk = np.divide(c_jk, np.square(length_jk)[: , np.newaxis])
     # Multiply be the gradient factor so we don't have to later (save some redundant computation)
-    g_ji = grad_factor * t_ji
-    g_jk = grad_factor * t_jk
+    g_ji = np.multiply(grad_factor, t_ji)
+    g_jk = np.multiply(grad_factor, t_jk)
     # Partials of theta with respect to x (times the gradient factor gives the correct partials of energy)
     de_djx = -g_ji[:, 1] + g_jk[:, 1]
     de_dix = g_ji[:, 1]
@@ -265,7 +265,7 @@ def get_bend_jacobian(
 
 
 def get_bend_energy(
-        bend_mod: float,
+        bend_mod: np.ndarray,
         pos_matrix: np.ndarray,
         corrections: np.ndarray,
         active_pi_indices: np.ndarray,
@@ -276,4 +276,5 @@ def get_bend_energy(
                                       active_pi_indices=active_pi_indices,
                                       orig_pi_angles=orig_pi_angles)
     # Energy is equal to 1/2 * kappa * (theta - theta_0)^2 for each bond
-    return 0.5 * bend_mod * np.sum(np.square(d_theta))
+    energy = 0.5 * np.multiply(bend_mod, np.square(d_theta))
+    return np.sum(energy)

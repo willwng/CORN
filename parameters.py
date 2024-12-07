@@ -9,6 +9,7 @@ import numpy as np
 from energyminimization.solvers.solver import MinimizationType
 from energyminimization.transformations import StretchX, StretchY, Shear, Dilate
 from lattice.lattice_type import LatticeType
+from protocol_types import Protocol
 from result_handling.output_handler import OutputHandlerParameters
 from result_handling.pickle_handler import VisualizationHandlerParameters
 from visualization.visualize_lattice import VisualizerParameters
@@ -20,7 +21,7 @@ class Parameters:
     random_seed = int(str(random_seed)[0:8])
 
     # ----- Lattice Properties -----
-    lattice_type: LatticeType = LatticeType.TRIANGULAR
+    lattice_type: LatticeType = LatticeType.DOUBLE_TRIANGULAR
     lattice_length: int = 30
     lattice_height: float = 31
 
@@ -36,24 +37,34 @@ class Parameters:
 
     # ----- Bond Occupation Protocol -----
     # Starting p_fill value
-    prob_fill_high: float = 0.6
+    prob_fill_high: float = 0.7
+    prob_fill_high2: float = 0.2  # for the second network (if DOUBLE_TRIANGULAR lattice is used)
     # When we remove bonds, this is our stopping criteria: all the moduli are below this value
     moduli_tolerance: float = 1e-8
 
+    # ----- Protocol to use -----
+    protocol = Protocol.STRAIN_SWEEP
+
     # ----- Mechanical Properties -----
     # alpha, kappa, mu: stretch, bend, transverse moduli
-    stretch_mod: float = 1.0
-    bend_mod: float = 0.01
-    tran_mod: float = 0.0
+    stretch_mod: float = 0.1
+    bend_mod: float = 0.0
+    tran_mod: float = 0.0  # to implement
+    # Mechanical properties of second network (if DOUBLE_TRIANGULAR lattice is used)
+    stretch_mod2: float = 1.0  # ideally normalize so this is 1
+    bend_mod2: float = 0.0
+    tran_mod2: float = 0.0
 
     # --- Lattice Strain ---
-    # Magnitude of the strain
+    # Magnitude of the strain [gamma] is for bond removal protocol, [gammas] is for strain sweep protocol
     gamma: float = 0.001
-    strains = [StretchX(gamma=gamma), StretchY(gamma=gamma)]
+    gammas = np.logspace(-3, 1, 30)  # 30 points from 10^-3 to 10^1
+    # Types of strain to apply for each gamma
+    strains = [StretchX(gamma=gamma)]
 
     # ----- Energy and Minimization -----
     # Method to minimize the energy
-    minimization_method: MinimizationType = MinimizationType.LINEAR
+    minimization_method: MinimizationType = MinimizationType.TRUST_CONSTR
     # Minimization Tolerances: see minimization methods. For linear systems this is usually norm(residual) <= tolerance
     tolerance = 1e-8
 
@@ -87,9 +98,9 @@ class Parameters:
 
     # ----- Saving Visualization Files -----
     pickle_handler_parameters = VisualizationHandlerParameters(
-        create_init_pdf=False,
+        create_init_pdf=True,
         create_sheared_pdf=False,
-        create_final_pdf=False,
+        create_final_pdf=True,
         save_lattice_pickle_file="lattice_pickle.p",
         final_pos_pickle_file="final_pos.p",
         init_pos_pdf_file="init_pos.pdf",

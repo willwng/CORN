@@ -50,7 +50,6 @@ class KagomeLattice(AbstractLattice):
         self.bonds = []
         self.pi_bonds = []
         self.name = "Kagome"
-        self.max_neighbors = 6
         self.height_increment = math.sqrt(3.0) / 2.0
         if generate:
             self.generate_nodes(length, height)

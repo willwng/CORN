@@ -1,14 +1,12 @@
-from enum import Enum
+from dataclasses import dataclass
 from typing import List, Optional
 
 import numpy as np
-from dataclasses import dataclass
-
 import scipy.optimize
 from scipy.sparse import spmatrix, csr_matrix
 
-import energyminimization.energies.stretch_full as snl
 import energyminimization.energies.bend_full as bnl
+import energyminimization.energies.stretch_full as snl
 import energyminimization.matrix_helper as pos
 from energyminimization.matrix_helper import KMatrixResult
 from energyminimization.solvers.conjugate_gradient import conjugate_gradient
@@ -65,9 +63,9 @@ class SolveParameters:
     angle_matrix: np.ndarray
     active_bond_indices: np.ndarray
     active_pi_indices: np.ndarray
-    stretch_mod: float
-    bend_mod: float
-    tran_mod: float
+    stretch_mod: np.ndarray
+    bend_mod: np.ndarray
+    tran_mod: np.ndarray
     tolerance: float
 
 
@@ -76,23 +74,32 @@ def setup_linear_system_matrices(params: SolveParameters):
     # Compute the K matrices (same as hessians)
     n = params.init_pos.shape[0]
     # Filter out active_bond_indices where bonds are PBC
-    active_bond_indices_in = params.active_bond_indices[
-        np.logical_and(params.active_bond_indices[:, 2] != 1, params.active_bond_indices[:, 3] != 1)]
-    active_bond_indices_pbc = params.active_bond_indices[
-        np.logical_or(params.active_bond_indices[:, 2] == 1, params.active_bond_indices[:, 3] == 1)]
+    ind_bond_in = np.logical_and(params.active_bond_indices[:, 2] != 1, params.active_bond_indices[:, 3] != 1)
+    ind_bond_pbc = np.logical_or(params.active_bond_indices[:, 2] == 1, params.active_bond_indices[:, 3] == 1)
+    active_bond_indices_in = params.active_bond_indices[ind_bond_in]
+    active_bond_indices_pbc = params.active_bond_indices[ind_bond_pbc]
+
     # Same for pi bonds
-    active_pi_indices_in = params.active_pi_indices[
-        np.logical_and(params.active_pi_indices[:, 7] != 1, params.active_pi_indices[:, 8] != 1)]
-    active_pi_indices_pbc = params.active_pi_indices[
-        np.logical_or(params.active_pi_indices[:, 7] == 1, params.active_pi_indices[:, 8] == 1)]
+    ind_pi_in = np.logical_and(params.active_pi_indices[:, 7] != 1, params.active_pi_indices[:, 8] != 1)
+    ind_pi_pbc = np.logical_or(params.active_pi_indices[:, 7] == 1, params.active_pi_indices[:, 8] == 1)
+    active_pi_indices_in = params.active_pi_indices[ind_pi_in]
+    active_pi_indices_pbc = params.active_pi_indices[ind_pi_pbc]
+
+    # Filter out the moduli
+    stretch_mod_in = params.stretch_mod[ind_bond_in]
+    stretch_mod_pbc = params.stretch_mod[ind_bond_pbc]
+    bend_mod_in = params.bend_mod[ind_pi_in]
+    bend_mod_pbc = params.bend_mod[ind_pi_pbc]
+    tran_mod_in = params.tran_mod[ind_bond_in]
+    tran_mod_pbc = params.tran_mod[ind_bond_pbc]
 
     # Compute the Hessians/K matrices for inner bonds, and the PBC bonds
-    k_matrices_in = pos.get_k_matrices(n=n, r_matrix=params.r_matrix, stretch_mod=params.stretch_mod,
-                                       bend_mod=params.bend_mod, tran_mod=params.tran_mod,
+    k_matrices_in = pos.get_k_matrices(n=n, r_matrix=params.r_matrix, stretch_mod=stretch_mod_in,
+                                       bend_mod=bend_mod_in, tran_mod=tran_mod_in,
                                        active_bond_indices=active_bond_indices_in,
                                        active_pi_indices=active_pi_indices_in)
-    k_matrices_pbc = pos.get_k_matrices(n=n, r_matrix=params.r_matrix, stretch_mod=params.stretch_mod,
-                                        bend_mod=params.bend_mod, tran_mod=params.tran_mod,
+    k_matrices_pbc = pos.get_k_matrices(n=n, r_matrix=params.r_matrix, stretch_mod=stretch_mod_pbc,
+                                        bend_mod=bend_mod_pbc, tran_mod=tran_mod_pbc,
                                         active_bond_indices=active_bond_indices_pbc,
                                         active_pi_indices=active_pi_indices_pbc)
 
@@ -173,7 +180,6 @@ def nonlinear_solve(params: SolveParameters, minimization_type: MinimizationType
                                           active_pi_indices=params.active_pi_indices,
                                           orig_pi_angles=params.angle_matrix)
         return stretch_energy + bend_energy
-
     def compute_total_gradient(pos_matrix: np.ndarray) -> np.ndarray:
         stretch_grad = snl.get_nonlinear_stretch_jacobian(
             stretch_mod=params.stretch_mod,
