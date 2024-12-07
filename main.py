@@ -77,6 +77,57 @@ def check_terminate_protocol(minimization_results: list[MinimizationResult]) -> 
     return all([modulus < Parameters.moduli_tolerance for modulus in moduli])
 
 
+def run_strain_sweep_protocol(lattice: AbstractLattice, output_handler: OutputHandler):
+    init_pos = pos.create_pos_matrix(lattice=lattice)
+
+    # Set the number of bonds in the lattice to p * total_bonds
+    r = Parameters.r_strength
+    p = min((1 / 3) + (2 / (3 * r)), Parameters.prob_fill_high)
+    basin.set_bonds_basin(lattice=lattice, p=p, r=r, target_direction=Parameters.target_direction)
+    lattice.update_active_bonds()
+
+    # All types of strains, initial guesses for each one
+    strains = Parameters.strains
+    init_guesses = [None] * len(strains)
+
+    gammas = np.logspace(-3, 1, 30)
+    for gamma in gammas:
+        # Run minimization
+        reusable_results = None
+        # --- Compute the response to each strain ---
+        minimization_results = []
+        for i, strain in enumerate(strains):
+            strain.update_gamma(gamma)
+            print(f" Performing strain: {strain.name} with magnitude {strain.gamma} --")
+            sheared_pos = strain.apply(pos_matrix=init_pos)
+            minimization_result = em.minimize(
+                lattice=lattice,
+                stretch_mod=Parameters.stretch_mod,
+                bend_mod=Parameters.bend_mod,
+                tran_mod=Parameters.tran_mod,
+                sheared_pos=sheared_pos,
+                strain=strain,
+                init_guess=init_guesses[i],
+                tolerance=Parameters.tolerance,
+                minimization_method=Parameters.minimization_method,
+                reusable_results=reusable_results
+            )
+            minimization_results.append(minimization_result)
+            # Results that can be re-used across the same lattice & p
+            reusable_results = minimization_result.reusable_results
+            # Initial guess for the next minimization with this strain
+            init_guesses[i] = minimization_result.final_pos
+            print(f" > {minimization_result.info}")
+            print(f" > Time used: {(minimization_result.time_used)} s")
+
+            # Print and append to arrays if using slope method
+            print(f" > Initial E: {minimization_result.init_energy}, Final E: {minimization_result.final_energy}")
+
+        update_output_file(lattice=lattice, minimization_results=minimization_results, output_handler=output_handler,
+                           bond_occupation=gamma)
+    return
+
+
 def run_removal_protocol(lattice: AbstractLattice, output_handler: OutputHandler):
     """
     Assigns each bond a random number s_i in (0, 1) and increases p: when p > s_i, we add the bond i
@@ -167,7 +218,7 @@ def main():
 
     # Run the appropriate protocol
     basin.assign_bond_seeds(lattice=lattice, rng=rng)  # assign a random number/key to each bond
-    run_removal_protocol(lattice=lattice, output_handler=output_handler)
+    run_strain_sweep_protocol(lattice=lattice, output_handler=output_handler)
 
 
 if __name__ == "__main__":

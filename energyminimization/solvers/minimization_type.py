@@ -12,6 +12,7 @@ from enum import Enum
 
 class MinimizationType(Enum):
     LINEAR = 0
+    # Begin nonlinear methods
     TRUST_NEWTON_CG = 1
     TRUST_CONSTR = 2
     FIRE = 3
