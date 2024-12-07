@@ -22,8 +22,9 @@ def test_gradient_hessian(
 
     for i in range(n_tests):
         x = x0
-        u = np.random.rand(x0.size)  # Pick a random displacement
-        h = 1e-5  # Step size
+        u = np.random.rand(x0.size)  # Pick a random displacement, normalize it
+        u /= np.linalg.norm(u)
+        h = 1e-3  # Step size
 
         # Evaluate the function at x, x + h*u, x - h*u
         f0 = f(x)
