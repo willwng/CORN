@@ -185,7 +185,7 @@ class OutputHandler:
             p_folder_name += f"p-{round(active / total, 3)}"
         p_folder_name = os.path.join(self.get_run_folder(), p_folder_name)
         create_folder_if_not_exist(p_folder_name)
-        folder_name = os.path.join(p_folder_name, f"{strain.name}-{strain.gamma}")
+        folder_name = os.path.join(p_folder_name, f"{strain.name}-{round(strain.gamma, 3)}")
         self.visualization_handler.create_pickle_visualizations(folder=folder_name, lattice=lattice,
                                                                 sheared_pos=sheared_pos, final_pos=final_pos)
         return
