@@ -5,7 +5,7 @@ Keep anything that pertains the output file here for consistency
 import csv
 import os
 import shutil
-from typing import List
+from typing import List, Tuple, Union
 
 import numpy as np
 
@@ -19,6 +19,7 @@ from result_handling.pickle_handler import VisualizationHandler
 class OutputHandlerParameters:
     """ Parameters to be fed into the output handler """
     inc_p: bool
+    inc_gamma: bool
     inc_energies: bool
     inc_ind_energies: bool
     inc_non_affinity: bool
@@ -34,10 +35,12 @@ class OutputHandlerParameters:
     # Whether to save these parameters within [folder_output]
     save_parameters = True
 
-    def __init__(self, inc_p: bool, inc_energies: bool, strains: list[Strain], inc_ind_energies: bool,
-                 inc_non_affinity: bool, inc_bond_counts: bool, inc_backbone_count: bool, output_path: str,
-                 run_folder_name: str, output_file: str, save_parameters: bool):
+    def __init__(self, inc_p: bool, inc_p2: bool, inc_gamma: bool, inc_energies: bool, strains: list[Strain],
+                 inc_ind_energies: bool, inc_non_affinity: bool, inc_bond_counts: bool, inc_backbone_count: bool,
+                 output_path: str, run_folder_name: str, output_file: str, save_parameters: bool):
         self.inc_p = inc_p
+        self.inc_p2 = inc_p2
+        self.inc_gamma = inc_gamma
         self.inc_energies = inc_energies
         self.strains = strains
         self.inc_ind_energies = inc_ind_energies
@@ -107,7 +110,12 @@ class OutputHandler:
     def _initialize_header(self):
         """ Initialize and write the header for the output file """
         header = OutputRow()
-        if self.params.inc_p:
+        if self.params.inc_gamma:
+            header.append("gamma")
+        if self.params.inc_p2:
+            header.append("p1")
+            header.append("p2")
+        elif self.params.inc_p:
             header.append("p")
         if self.params.inc_energies:
             header.extend([strain.name for strain in self.params.strains])
@@ -125,22 +133,28 @@ class OutputHandler:
     def add_results(
             self,
             lattice: AbstractLattice,
-            bond_occupation: float,
-            minimization_results: List[MinimizationResult],
+            strain: Strain,
+            minimization_result: MinimizationResult,
     ):
         """ Add the results of the minimization to the output file (typically one row) """
         row = OutputRow()
 
-        shear_mod_result = minimization_results[-1]
         # Write the results to the csv file
-        if self.params.inc_p:
-            row.append(bond_occupation)
+        if self.params.inc_gamma:
+            row.append(strain.gamma)
+        if self.params.inc_p2:
+            assert type(lattice).__name__ == "DoubleTriangularLattice"
+            p1, p2 = lattice.get_bond_occupations()
+            row.extend([p1, p2])
+        elif self.params.inc_p:
+            active, total = lattice.get_bond_occupation()
+            row.append(round(active / total, 6))
         if self.params.inc_energies:
-            row.extend([result.final_energy for result in minimization_results])
+            row.append(minimization_result.final_energy)
         if self.params.inc_ind_energies:
-            row.extend(shear_mod_result.individual_energies)
+            row.extend(minimization_result.individual_energies)
         if self.params.inc_non_affinity:
-            non_affinity = shear_mod_result.non_affinity_result
+            non_affinity = minimization_result.non_affinity_result
             row.extend([non_affinity.gamma, non_affinity.gamma_x, non_affinity.gamma_y])
         if self.params.inc_bond_counts:
             bond_directions = np.array([bond.get_direction() for bond in lattice.get_active_bonds()])
@@ -148,17 +162,31 @@ class OutputHandler:
             # Subtract off the number of boundary bonds (should not be counted)
             row.extend(counts)
         if self.params.inc_backbone_count:
-            backbone_result = shear_mod_result.backbone_result
+            backbone_result = minimization_result.backbone_result
             row.extend([backbone_result.n_stretch, backbone_result.n_bend, backbone_result.n_tran])
 
         self._write_row(row)
         return
 
-    def create_pickle_visualizations(self, folder_name: str, lattice: AbstractLattice, sheared_pos: np.ndarray,
-                                     final_pos: np.ndarray):
+    def create_pickle_visualizations(
+            self,
+            lattice: AbstractLattice,
+            strain: Strain,
+            sheared_pos: np.ndarray,
+            final_pos: np.ndarray):
         """ Create pickle files for the lattice and minimization result """
-        pickle_out_path = os.path.join(self.get_run_folder(), folder_name)
-        self.visualization_handler.create_pickle_visualizations(folder=pickle_out_path, lattice=lattice,
+        # Folder structure is {p}/{strain}-{gamma}
+        p_folder_name = ""
+        if type(lattice).__name__ == "DoubleTriangularLattice":
+            p1, p2 = lattice.get_bond_occupations()
+            p_folder_name += f"p1-{round(p1, 3)}_p2-{round(p2, 3)}"
+        else:
+            active, total = lattice.get_bond_occupation()
+            p_folder_name += f"p-{round(active / total, 3)}"
+        p_folder_name = os.path.join(self.get_run_folder(), p_folder_name)
+        create_folder_if_not_exist(p_folder_name)
+        folder_name = os.path.join(p_folder_name, f"{strain.name}-{strain.gamma}")
+        self.visualization_handler.create_pickle_visualizations(folder=folder_name, lattice=lattice,
                                                                 sheared_pos=sheared_pos, final_pos=final_pos)
         return
 

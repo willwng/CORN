@@ -16,7 +16,7 @@ from visualization.visualize_lattice import VisualizerParameters
 
 
 class Parameters:
-    # Random seed for reproducibility (take first 8 digits of entropy - we don't need the full amount)
+    # Random seed for reproducibility (take first 8 digits - we don't need the full amount)
     random_seed: int = np.random.SeedSequence().entropy
     random_seed = int(str(random_seed)[0:8])
 
@@ -25,7 +25,7 @@ class Parameters:
     lattice_length: int = 30
     lattice_height: float = 31
 
-    # Generic networks have slight displacements in node positions
+    # Generic networks have slight displacements in the rest node positions
     is_generic: bool = False
     d_shift: float = 0.01
 
@@ -42,7 +42,7 @@ class Parameters:
     # When we remove bonds, this is our stopping criteria: all the moduli are below this value
     moduli_tolerance: float = 1e-8
 
-    # ----- Protocol to use -----
+    # ----- Protocol to use (see protocol_types.py) -----
     protocol = Protocol.STRAIN_SWEEP
 
     # ----- Mechanical Properties -----
@@ -69,12 +69,13 @@ class Parameters:
     tolerance = 1e-8
 
     # ----- Output Handling -----
-    # (See OutputHandlerParameters for more details)
-    today_date = datetime.now().strftime("%m-%d-%y-%H")
+    # The folder name to save the output files of the run
     run_folder_name: str = f"{lattice_length}-{str(random_seed)}-{r_strength}"
     output_handler_parameters = OutputHandlerParameters(
         strains=strains,
+        inc_gamma=True,
         inc_p=True,
+        inc_p2=lattice_type == LatticeType.DOUBLE_TRIANGULAR,
         inc_energies=True,
         inc_ind_energies=False,
         inc_non_affinity=False,

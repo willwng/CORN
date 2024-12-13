@@ -5,15 +5,14 @@ To run the code:
     '(python executable) main.py'
 """
 import inspect
-
 import numpy as np
 
 import energyminimization.matrix_helper as pos
 import energyminimization.minimize as em
 import lattice.bond_basin_helper as basin
 from energyminimization.minimize import MinimizationResult
+from energyminimization.transformations import Strain
 from lattice.abstract_lattice import AbstractLattice
-from lattice.generic_lattice import make_generic
 from lattice.lattice_factory import LatticeFactory
 from parameters import Parameters
 from protocol_types import Protocol
@@ -22,22 +21,20 @@ from visualization.visualize_lattice import Visualizer
 
 
 def initialize_lattice(rng: np.random.Generator) -> AbstractLattice:
+    """
+    Generates a fresh lattice object based on parameters and set mechanical properties
+    """
     lattice = LatticeFactory.create_lattice(
         lattice_type=Parameters.lattice_type,
         length=Parameters.lattice_length,
         height=Parameters.lattice_height,
+        is_generic=Parameters.is_generic,
+        rng=rng,
+        d_shift=Parameters.d_shift
     )
 
-    # --- Initialization steps ---
-    # Pre-compute bond directions
-    [bond.get_direction() for bond in lattice.get_bonds()]
-
-    # Make the lattice generic if specified
-    if Parameters.is_generic:
-        make_generic(lattice=lattice, rng=rng, d_shift=Parameters.d_shift)
-
-    # Patches any potential issues with periodic boundary conditions
-    lattice.patch_pbc()
+    # Assign a random number/key to each bond
+    basin.assign_bond_seeds(lattice=lattice, rng=rng)
 
     # Set the mechanical properties
     lattice.set_stretch_mod(Parameters.stretch_mod, Parameters.stretch_mod2)
@@ -46,31 +43,20 @@ def initialize_lattice(rng: np.random.Generator) -> AbstractLattice:
     return lattice
 
 
-def update_output_file(
-        lattice: AbstractLattice,
-        minimization_results: list[MinimizationResult],
+def update_outputs_files(
         output_handler: OutputHandler,
-        bond_occupation: float
-):
+        lattice: AbstractLattice,
+        strain: Strain,
+        minimization_result: MinimizationResult):
     """
-    After each minimization, update the output file and potentially create final visualizations/pickles
+    Updates the output files with the results of the minimization
     """
-    # Write the results to the output
-    output_handler.add_results(lattice=lattice, bond_occupation=bond_occupation,
-                               minimization_results=minimization_results)
-    last_result = minimization_results[-1]
-    output_handler.create_pickle_visualizations(folder_name=str(round(bond_occupation, 6)), lattice=lattice,
-                                                sheared_pos=last_result.sheared_pos, final_pos=last_result.final_pos)
-
-
-def check_terminate_protocol(minimization_results: list[MinimizationResult]) -> bool:
-    """
-    This function determines whether the protocol should terminate.
-    Current implementation checks when all moduli are below the tolerance
-    """
-    area_lattice = Parameters.lattice_length * Parameters.lattice_height
-    moduli = [2 * result.final_energy / (area_lattice * Parameters.gamma ** 2) for result in minimization_results]
-    return all([modulus < Parameters.moduli_tolerance for modulus in moduli])
+    output_handler.add_results(lattice=lattice, strain=strain, minimization_result=minimization_result)
+    output_handler.create_pickle_visualizations(lattice=lattice,
+                                                strain=strain,
+                                                sheared_pos=minimization_result.sheared_pos,
+                                                final_pos=minimization_result.final_pos)
+    return
 
 
 def run_strain_sweep_protocol(lattice: AbstractLattice, output_handler: OutputHandler):
@@ -97,7 +83,6 @@ def run_strain_sweep_protocol(lattice: AbstractLattice, output_handler: OutputHa
         # Run minimization
         reusable_results = None
         # --- Compute the response to each strain ---
-        minimization_results = []
         for i, strain in enumerate(strains):
             strain.update_gamma(gamma)
             print(f"-- Performing strain: {strain.name} with magnitude {strain.gamma} --")
@@ -111,14 +96,14 @@ def run_strain_sweep_protocol(lattice: AbstractLattice, output_handler: OutputHa
                 minimization_method=Parameters.minimization_method,
                 reusable_results=reusable_results
             )
-            minimization_results.append(minimization_result)
             # Results that can be re-used across the same lattice & p
             reusable_results = minimization_result.reusable_results
             # Initial guess for the next minimization with this strain
             init_guesses[i] = minimization_result.final_pos
 
-        update_output_file(lattice=lattice, minimization_results=minimization_results, output_handler=output_handler,
-                           bond_occupation=gamma)
+            # Update outputs
+            update_outputs_files(output_handler=output_handler, lattice=lattice, strain=strain,
+                                 minimization_result=minimization_result)
     return
 
 
@@ -131,6 +116,7 @@ def run_removal_protocol(lattice: AbstractLattice, output_handler: OutputHandler
     # Start with an empty lattice and assign each bond a random number in (0, 1)
     lattice.set_bonds(prob_fill=0.0)
     lattice.update_active_bonds()
+    area_lattice = Parameters.lattice_length * Parameters.lattice_height
 
     # The threshold of p must be less than p_max, otherwise the threshold can be larger than 1
     r = Parameters.r_strength
@@ -178,12 +164,15 @@ def run_removal_protocol(lattice: AbstractLattice, output_handler: OutputHandler
             # Initial guess for the next minimization with this strain
             init_guesses[i] = minimization_result.final_pos
 
-        update_output_file(lattice=lattice, minimization_results=minimization_results, output_handler=output_handler,
-                           bond_occupation=p)
+            # Update output files
+            update_outputs_files(output_handler=output_handler, lattice=lattice, strain=strain,
+                                 minimization_result=minimization_result)
 
-        # Check termination of protocol
-        if check_terminate_protocol(minimization_results):
+        # Determine if we should terminate this protocol
+        moduli = [2 * result.final_energy / (area_lattice * Parameters.gamma ** 2) for result in minimization_results]
+        if all([modulus < Parameters.moduli_tolerance for modulus in moduli]):
             break
+
     return
 
 
@@ -192,7 +181,7 @@ def main():
     seed = Parameters.random_seed
     rng = np.random.default_rng(seed)
 
-    # Result are taken care of by the dedicated handlers
+    # Result files and visualizations are taken care of by the dedicated handlers
     visualizer = Visualizer(params=Parameters.visualizer_parameters)
     visualization_handler = VisualizationHandler(params=Parameters.pickle_handler_parameters, visualizer=visualizer)
     output_handler = OutputHandler(parameter_path=inspect.getfile(Parameters),
@@ -201,7 +190,6 @@ def main():
 
     # Initialize the lattice object
     lattice = initialize_lattice(rng=rng)
-    basin.assign_bond_seeds(lattice=lattice, rng=rng)  # assign a random number/key to each bond
 
     # Run the appropriate protocol
     if Parameters.protocol == Protocol.BOND_REMOVAL:

@@ -69,6 +69,14 @@ class DoubleTriangularLattice(AbstractLattice):
             raise ValueError("Bond not found in either network")
         self.bonds.remove(bond)
 
+    def get_bond_occupations(self):
+        """
+        Returns p1, p2, the bond occupation fractions for the two networks
+        """
+        active1, bonds1 = self.network1.get_bond_occupation()
+        active2, bonds2 = self.network2.get_bond_occupation()
+        return active1 / bonds1, active2 / bonds2
+
     def update_active_bonds(self) -> None:
         self.network1.update_active_bonds()
         self.network2.update_active_bonds()
