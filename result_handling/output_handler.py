@@ -179,12 +179,15 @@ class OutputHandler:
         p_folder_name = ""
         if type(lattice).__name__ == "DoubleTriangularLattice":
             p1, p2 = lattice.get_bond_occupations()
-            p_folder_name += f"p1-{round(p1, 3)}_p2-{round(p2, 3)}"
+            p_folder_name += f"p1-{round(p1, 6)}_p2-{round(p2, 6)}"
         else:
             active, total = lattice.get_bond_occupation()
-            p_folder_name += f"p-{round(active / total, 3)}"
+            p_folder_name += f"p-{round(active / total, 6)}"
         p_folder_name = os.path.join(self.get_run_folder(), p_folder_name)
-        create_folder_if_not_exist(p_folder_name)
+
+        if self.visualization_handler.requires_visualization():
+            create_folder_if_not_exist(p_folder_name)
+
         folder_name = os.path.join(p_folder_name, f"{strain.name}-{round(strain.gamma, 5)}")
         self.visualization_handler.create_pickle_visualizations(folder=folder_name, lattice=lattice,
                                                                 sheared_pos=sheared_pos, final_pos=final_pos)

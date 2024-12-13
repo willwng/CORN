@@ -43,7 +43,7 @@ class Parameters:
     moduli_tolerance: float = 1e-8
 
     # ----- Protocol to use (see protocol_types.py) -----
-    protocol = Protocol.STRAIN_SWEEP
+    protocol = Protocol.BOND_REMOVAL
 
     # ----- Mechanical Properties -----
     # alpha, kappa, mu: stretch, bend, transverse moduli
@@ -99,9 +99,9 @@ class Parameters:
 
     # ----- Saving Visualization Files -----
     pickle_handler_parameters = VisualizationHandlerParameters(
-        create_init_pdf=True,
+        create_init_pdf=False,
         create_sheared_pdf=False,
-        create_final_pdf=True,
+        create_final_pdf=False,
         save_lattice_pickle_file="lattice_pickle.p",
         final_pos_pickle_file="final_pos.p",
         init_pos_pdf_file="init_pos.pdf",

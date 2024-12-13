@@ -136,6 +136,7 @@ def run_removal_protocol(lattice: AbstractLattice, output_handler: OutputHandler
         # Remove the bond next in queue
         next_bond = removal_order.popleft()
         lattice.remove_bond(next_bond)
+        lattice.update_active_bonds()
 
         # Get the bond occupation (right now use the actual p value)
         active_bonds, total_bonds = lattice.get_bond_occupation()

@@ -55,4 +55,10 @@ def get_removal_order(lattice: AbstractLattice, r: float, target_direction: int)
     # Sort in the order that they should be removed, then filter out the ones that are already removed
     removal_order = list(sorted(lattice.get_bonds(), key=lambda b: get_add_p(b, r), reverse=True))
     removal_order = list(filter(lambda b: b.exists(), removal_order))
+
+    # For double networks, only remove from second network
+    if type(lattice).__name__ == "DoubleTriangularLattice":
+        removable_bonds = lattice.get_removable_bonds()
+        removal_order = list(filter(lambda b: b in removable_bonds, removal_order))
+
     return deque(removal_order)

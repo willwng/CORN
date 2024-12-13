@@ -44,7 +44,7 @@ class VisualizationHandler:
         self.params = params
         self.visualizer = visualizer
 
-    def _requires_visualization(self) -> bool:
+    def requires_visualization(self) -> bool:
         return any([self.params.create_init_pdf, self.params.create_sheared_pdf, self.params.create_final_pdf])
 
     def create_pickle_visualizations(
@@ -62,7 +62,7 @@ class VisualizationHandler:
         :param final_pos: final position matrix/vector of lattice
         """
         # Create the folder if required (and it doesn't exist)
-        if self._requires_visualization():
+        if self.requires_visualization():
             create_folder_if_not_exist(folder)
 
         # Visualizations of initial, sheared, final states
@@ -78,5 +78,5 @@ class VisualizationHandler:
                                       filename=os.path.join(folder, self.params.final_pos_pdf_file))
 
         # Close all figures (should save on some memory)
-        if self._requires_visualization():
+        if self.requires_visualization():
             plt.close("all")
